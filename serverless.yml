@@ -5,29 +5,35 @@ app: orsa
 # "service" is the name of this project. This will also be added to your AWS resource names.
 service: orsa-admin-backend
 
+plugins:
+  - serverless-plugin-aws-alerts
+
 provider:
   name: aws
   runtime: nodejs20.x
   region: eu-west-3
-  
+
   # VPC Configuration to access private RDS database
   # You need to update these with your actual VPC, subnet, and security group IDs
   vpc:
     securityGroupIds:
-      - sg-06745c25a3b52833b  # Replace with your RDS security group ID
+      - sg-06745c25a3b52833b # Replace with your RDS security group ID
     subnetIds:
-      - subnet-0c6d5836c444e066b  # Replace with private subnet IDs
+      - subnet-0c6d5836c444e066b # Replace with private subnet IDs
       - subnet-028206bbed10db409
       - subnet-0092491643bdfa079
-  
+
   # Configure environment variables (these will be available in Lambda)
+  # Note: We're using hardcoded values for now. In production, use secure ways to handle credentials
+  # such as AWS Systems Manager Parameter Store or AWS Secrets Manager
   environment:
-    DB_HOST: ${env:DB_HOST}
-    DB_USER: ${env:DB_USER}
-    DB_PASSWORD: ${env:DB_PASSWORD}
-    DB_NAME: ${env:DB_NAME}
-    DB_PORT: ${env:DB_PORT, '3306'}
-  
+    # Update these values with your actual database information
+    DB_HOST: "orsa-ecommerce.cjkwgkcwoyr0.eu-west-3.rds.amazonaws.com" # UPDATE THIS
+    DB_USER: "admin" # UPDATE THIS if different
+    DB_PASSWORD: ".c>0VXNH0_JA4Qa)vy(PeI5Ijw#R" # UPDATE THIS
+    DB_NAME: "Orsa"
+    DB_PORT: "3306"
+
   # IAM role permissions
   iam:
     role:
@@ -40,21 +46,76 @@ provider:
             - ec2:DeleteNetworkInterface
             - ec2:AssignPrivateIpAddresses
             - ec2:UnassignPrivateIpAddresses
-          Resource: '*'
+          Resource: "*"
 
 # Package configuration
 package:
   individually: true
   patterns:
-    - '!node_modules/.cache/**'
-    - '!.env'
-    - '!.git/**'
+    - "!node_modules/.cache/**"
+    - "!.env"
+    - "!.git/**"
 
 # Custom configurations if needed
 custom:
-  timeout: 30  # Default timeout for all functions (30 seconds)
+  timeout: 30 # Default timeout for all functions (30 seconds)
+
+  # Configure AWS CloudWatch Alerts for monitoring and debugging
+  alerts:
+    stages:
+      - dev
+      - prod
+    topics:
+      alarm:
+        topic: orsa-admin-backend-alerts
+        notifications:
+          - protocol: email
+            endpoint: "kjamil2004@gmail.com" # Update with your email
+    alarms:
+      - functionErrors
+      - functionThrottles
+      - functionDuration
+    definitions:
+      functionErrors:
+        description: "Lambda function errors"
+        namespace: "AWS/Lambda"
+        metric: Errors
+        threshold: 1
+        statistic: Sum
+        period: 60
+        evaluationPeriods: 1
+        comparisonOperator: GreaterThanOrEqualToThreshold
+        treatMissingData: notBreaching
+      functionThrottles:
+        description: "Lambda function throttles"
+        namespace: "AWS/Lambda"
+        metric: Throttles
+        threshold: 1
+        statistic: Sum
+        period: 60
+        evaluationPeriods: 1
+        comparisonOperator: GreaterThanOrEqualToThreshold
+        treatMissingData: notBreaching
+      functionDuration:
+        description: "Lambda function duration"
+        namespace: "AWS/Lambda"
+        metric: Duration
+        threshold: 5000 # 5 seconds
+        statistic: Maximum
+        period: 60
+        evaluationPeriods: 1
+        comparisonOperator: GreaterThanOrEqualToThreshold
+        treatMissingData: notBreaching
 
 functions:
+  # Test function to debug connectivity and permissions
+  testDbConnection:
+    handler: handler.testDbConnection
+    events:
+      - httpApi:
+          path: /test-connection
+          method: get
+    timeout: 60 # Longer timeout for debugging
   # Product endpoints
   getProducts:
     handler: handler.getProducts
@@ -66,7 +127,7 @@ functions:
           path: /products/{id}
           method: get
     timeout: ${self:custom.timeout}
-  
+
   createProduct:
     handler: handler.createProduct
     events:
@@ -74,7 +135,7 @@ functions:
           path: /products
           method: post
     timeout: ${self:custom.timeout}
-  
+
   updateProduct:
     handler: handler.updateProduct
     events:
@@ -82,7 +143,7 @@ functions:
           path: /products/{id}
           method: put
     timeout: ${self:custom.timeout}
-  
+
   deleteProduct:
     handler: handler.deleteProduct
     events:
@@ -90,7 +151,7 @@ functions:
           path: /products/{id}
           method: delete
     timeout: ${self:custom.timeout}
-  
+
   # User endpoints
   getUsers:
     handler: handler.getUsers
@@ -102,7 +163,7 @@ functions:
           path: /users/{id}
           method: get
     timeout: ${self:custom.timeout}
-  
+
   createUser:
     handler: handler.createUser
     events:
@@ -110,7 +171,7 @@ functions:
           path: /users
           method: post
     timeout: ${self:custom.timeout}
-  
+
   updateUser:
     handler: handler.updateUser
     events:
@@ -118,7 +179,7 @@ functions:
           path: /users/{id}
           method: put
     timeout: ${self:custom.timeout}
-  
+
   deleteUser:
     handler: handler.deleteUser
     events:
@@ -126,7 +187,7 @@ functions:
           path: /users/{id}
           method: delete
     timeout: ${self:custom.timeout}
-  
+
   # Order endpoints
   getOrders:
     handler: handler.getOrders
@@ -138,7 +199,7 @@ functions:
           path: /orders/{id}
           method: get
     timeout: ${self:custom.timeout}
-  
+
   createOrder:
     handler: handler.createOrder
     events:
@@ -146,7 +207,7 @@ functions:
           path: /orders
           method: post
     timeout: ${self:custom.timeout}
-  
+
   updateOrder:
     handler: handler.updateOrder
     events:
@@ -154,7 +215,7 @@ functions:
           path: /orders/{id}
           method: put
     timeout: ${self:custom.timeout}
-  
+
   deleteOrder:
     handler: handler.deleteOrder
     events:
@@ -162,7 +223,7 @@ functions:
           path: /orders/{id}
           method: delete
     timeout: ${self:custom.timeout}
-  
+
   # Order item endpoints
   addOrderItem:
     handler: handler.addOrderItem
@@ -171,7 +232,7 @@ functions:
           path: /orders/{id}/items
           method: post
     timeout: ${self:custom.timeout}
-  
+
   removeOrderItem:
     handler: handler.removeOrderItem
     events:

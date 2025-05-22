@@ -4,7 +4,12 @@
   "description": "<!-- title: 'AWS Simple HTTP Endpoint example in NodeJS' description: 'This template demonstrates how to make a simple HTTP API with Node.js running on AWS Lambda and API Gateway using the Serverless Framework.' layout: Doc framework: v4 platform: AWS language: nodeJS authorLink: 'https://github.com/serverless' authorName: 'Serverless, Inc.' authorAvatar: 'https://avatars1.githubusercontent.com/u/13742415?s=200&v=4' -->",
   "main": "handler.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "serverless deploy --verbose",
+    "deploy:prod": "serverless deploy --stage prod --verbose",
+    "logs": "serverless logs -f",
+    "logs:test": "serverless logs -f testDbConnection --tail",
+    "test:connection": "node test-connection.js"
   },
   "keywords": [],
   "author": "",
@@ -13,5 +18,8 @@
   "dependencies": {
     "dotenv": "^16.5.0",
     "mysql2": "^3.14.1"
+  },
+  "devDependencies": {
+    "serverless-plugin-aws-alerts": "^1.7.5"
   }
 }
