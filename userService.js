@@ -43,12 +43,13 @@ const getUserById = async (id) => {
 const createUser = async (user) => {
   const query = `
     INSERT INTO users (
-      first_name, last_name, email, address, 
+      id, first_name, last_name, email, address, 
       birthdate, gender, phone_number
     ) 
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
   const params = [
+    user.id,
     user.first_name,
     user.last_name,
     user.email,
