@@ -7,6 +7,7 @@ service: orsa-admin-backend
 
 plugins:
   - serverless-plugin-aws-alerts
+  - serverless-offline
 
 provider:
   name: aws
@@ -222,6 +223,14 @@ functions:
       - httpApi:
           path: /orders/{id}
           method: delete
+    timeout: ${self:custom.timeout}
+
+  getTotalPrice:
+    handler: handler.getTotalPrice
+    events:
+      - httpApi:
+          path: /orders/total-price
+          method: get
     timeout: ${self:custom.timeout}
 
   # Order item endpoints

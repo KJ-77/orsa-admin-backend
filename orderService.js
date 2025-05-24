@@ -310,6 +310,31 @@ const removeOrderItem = async (itemId) => {
   }
 };
 
+const getTotalPrice = async (dateRange = {}) => {
+  const connection = await pool.getConnection();
+  try {
+    // Set default dates if not provided
+    const fromDate = dateRange.from || '2020-01-01';
+    const toDate = dateRange.to || new Date().toISOString().slice(0, 10); // Today's date in YYYY-MM-DD format
+    
+    const query = `
+      SELECT SUM(total_price) AS total
+      FROM orders
+      WHERE created_at BETWEEN ? AND ?
+    `;
+    
+    const [rows] = await connection.execute(query, [fromDate, toDate]);
+    
+    // First row, total column, or 0 if null
+    return rows[0].total || 0;
+  } catch (error) {
+    console.error('Error getting total price:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   getAllOrders,
   getOrderById,
@@ -318,4 +343,5 @@ module.exports = {
   deleteOrder,
   addOrderItem,
   removeOrderItem,
+  getTotalPrice,
 };

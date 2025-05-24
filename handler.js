@@ -484,6 +484,36 @@ exports.removeOrderItem = async (event) => {
 };
 
 /**
+ * Get total price within a month
+ */
+exports.getTotalPrice = async (event) => {
+  try {
+    // Parse query parameters from the GET request
+    const queryParams = event.queryStringParameters || {};
+    
+    // Create date range object using query parameters
+    const dateRange = {
+      from: queryParams.from,
+      to: queryParams.to
+    };
+
+    // No validation needed - our service function handles missing dates
+
+    const totalPrice = await orderService.getTotalPrice(dateRange);
+
+    return createResponse(200, {
+      totalPrice,
+      dateRange: {
+        from: dateRange.from || 'all time start',
+        to: dateRange.to || 'today'
+      }
+    });
+  } catch (error) {
+    return handleError(error);
+  }
+};
+
+/**
  * Test database connection and troubleshoot issues
  * This function performs comprehensive diagnostics of:
  * - VPC configuration

@@ -20,6 +20,7 @@
     "mysql2": "^3.14.1"
   },
   "devDependencies": {
+    "serverless-offline": "^14.4.0",
     "serverless-plugin-aws-alerts": "^1.7.5"
   }
 }
