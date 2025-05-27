@@ -14,6 +14,30 @@ provider:
   runtime: nodejs20.x
   region: eu-west-3
 
+  httpApi:
+    cors:
+        allowedOrigins:
+          - "https://orsa-admin.vercel.app"
+          - "http://localhost:3000"  # For local development
+        allowedHeaders:
+          - Content-Type           # Essential for JSON requests
+          - Authorization         # For authentication tokens
+          - X-Requested-With      # Common for AJAX/fetch requests
+          - X-Api-Key            # If you plan to use API keys
+          - Accept               # For content negotiation
+        allowedMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        allowCredentials: true
+        exposedHeaders:
+          - X-Total-Count         # For pagination in your product/order lists
+          - X-Rate-Limit          # If you implement rate limiting
+          - Content-Range         # For range queries
+        maxAge: 86400  # 24 hours
+
   # VPC Configuration to access private RDS database
   # You need to update these with your actual VPC, subnet, and security group IDs
   vpc:
