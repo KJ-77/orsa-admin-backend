@@ -14,7 +14,7 @@ const config = {
       process.env.DB_HOST ||
       "orsa-ecommerce.cjkwgkcwoyr0.eu-west-3.rds.amazonaws.com", // UPDATE THIS
     user: process.env.DB_USER || "admin", // UPDATE THIS if different
-    password: process.env.DB_PASSWORD || ".c>0VXNH0_JA4Qa)vy(PeI5Ijw#R", // UPDATE THIS
+    password: process.env.DB_PASSWORD || "[[E<fWsd0CK02s6O-b)>tjxi3Fnp", // UPDATE THIS
     database: process.env.DB_NAME || "Orsa",
     port: parseInt(process.env.DB_PORT || "3306", 10),
   },

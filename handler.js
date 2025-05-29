@@ -7,6 +7,7 @@
 const productService = require("./productService");
 const userService = require("./userService");
 const orderService = require("./orderService");
+const imageService = require("./imageService");
 
 /**
  * Helper function to create a standardized API response
@@ -490,11 +491,11 @@ exports.getTotalPrice = async (event) => {
   try {
     // Parse query parameters from the GET request
     const queryParams = event.queryStringParameters || {};
-    
+
     // Create date range object using query parameters
     const dateRange = {
       from: queryParams.from,
-      to: queryParams.to
+      to: queryParams.to,
     };
 
     // No validation needed - our service function handles missing dates
@@ -504,9 +505,9 @@ exports.getTotalPrice = async (event) => {
     return createResponse(200, {
       totalPrice,
       dateRange: {
-        from: dateRange.from || 'all time start',
-        to: dateRange.to || 'today'
-      }
+        from: dateRange.from || "all time start",
+        to: dateRange.to || "today",
+      },
     });
   } catch (error) {
     return handleError(error);
@@ -677,5 +678,207 @@ exports.testDbConnection = async (event) => {
       message: error.message,
       stack: error.stack,
     });
+  }
+};
+
+// ========== Product Image Handlers ==========
+
+/**
+ * Upload a product image to S3
+ * Supports both Base64 encoded data and direct binary uploads
+ */
+exports.uploadProductImage = async (event) => {
+  try {
+    console.log("Starting image upload process...");
+    console.log("Event headers:", event.headers);
+    console.log("Event isBase64Encoded:", event.isBase64Encoded);
+    console.log("Body type:", typeof event.body);
+
+    let imageBuffer;
+    let contentType;
+    let originalName = "uploaded-image";
+
+    // Check if this is a binary upload
+    const isBinary =
+      event.isBase64Encoded ||
+      (event.headers &&
+        (event.headers["content-type"]?.startsWith("image/") ||
+          event.headers["Content-Type"]?.startsWith("image/")));
+
+    if (isBinary) {
+      // Handle binary upload
+      console.log("Processing binary image upload...");
+
+      // Get content type from headers
+      contentType =
+        event.headers["content-type"] ||
+        event.headers["Content-Type"] ||
+        "image/jpeg";
+
+      // Get filename from X-Filename header if provided
+      originalName =
+        event.headers["x-filename"] ||
+        event.headers["X-Filename"] ||
+        event.headers["x-file-name"] ||
+        event.headers["X-File-Name"] ||
+        `image-${Date.now()}.${contentType.split("/")[1] || "jpg"}`;
+
+      if (event.isBase64Encoded) {
+        // Body is base64 encoded binary data
+        try {
+          imageBuffer = Buffer.from(event.body, "base64");
+        } catch (error) {
+          return createResponse(400, {
+            error: "Invalid binary data",
+            message: "Could not decode the provided binary image data",
+          });
+        }
+      } else {
+        // Body should be binary string
+        imageBuffer = Buffer.from(event.body, "binary");
+      }
+
+      console.log(
+        `Binary upload - Content-Type: ${contentType}, Filename: ${originalName}, Size: ${imageBuffer.length} bytes`
+      );
+    } else {
+      // Handle JSON payload with Base64 data (legacy support)
+      console.log("Processing JSON with Base64 image upload...");
+
+      const body = parseBody(event.body);
+
+      // Validate required fields
+      if (!body.image) {
+        return createResponse(400, {
+          error: "Image data is required",
+          message:
+            "Please provide image data in base64 format or as binary data",
+        });
+      }
+
+      contentType = body.contentType || "image/jpeg";
+      originalName = body.fileName || "uploaded-image";
+
+      if (typeof body.image === "string") {
+        // Handle Base64 data
+        let base64Data = body.image;
+
+        // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+        if (base64Data.startsWith("data:")) {
+          const base64Index = base64Data.indexOf(",");
+          if (base64Index !== -1) {
+            // Extract content type from data URL
+            const dataUrlPrefix = base64Data.substring(0, base64Index);
+            const contentTypeMatch = dataUrlPrefix.match(/data:([^;]+)/);
+            if (contentTypeMatch) {
+              contentType = contentTypeMatch[1];
+            }
+            base64Data = base64Data.substring(base64Index + 1);
+          }
+        }
+
+        // Convert base64 to buffer
+        try {
+          imageBuffer = Buffer.from(base64Data, "base64");
+        } catch (error) {
+          return createResponse(400, {
+            error: "Invalid base64 image data",
+            message: "Could not decode the provided base64 image data",
+          });
+        }
+      } else {
+        return createResponse(400, {
+          error: "Unsupported image format",
+          message: "Please provide image as base64 encoded string",
+        });
+      }
+    }
+
+    // Validate image type
+    if (!imageService.isValidImageType(contentType)) {
+      return createResponse(400, {
+        error: "Invalid image type",
+        message: "Supported formats: JPEG, PNG, GIF, WebP, SVG",
+        providedType: contentType,
+      });
+    }
+
+    // Check file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+    if (imageBuffer.length > maxSize) {
+      return createResponse(400, {
+        error: "File too large",
+        message: `Maximum file size is ${maxSize / (1024 * 1024)}MB`,
+        fileSize: `${(imageBuffer.length / (1024 * 1024)).toFixed(2)}MB`,
+      });
+    }
+
+    console.log(
+      `Uploading image: ${originalName}, type: ${contentType}, size: ${imageBuffer.length} bytes`
+    );
+
+    // Upload to S3
+    const uploadResult = await imageService.uploadImage(
+      imageBuffer,
+      contentType,
+      originalName
+    );
+
+    console.log("Image uploaded successfully:", uploadResult);
+
+    return createResponse(201, {
+      message: "Image uploaded successfully",
+      image: {
+        key: uploadResult.key,
+        url: uploadResult.url,
+        bucket: uploadResult.bucket,
+        contentType: contentType,
+        size: imageBuffer.length,
+        fileName: originalName,
+      },
+    });
+  } catch (error) {
+    console.error("Error uploading product image:", error);
+    return handleError(error);
+  }
+};
+
+/**
+ * Delete a product image from S3
+ */
+exports.deleteProductImage = async (event) => {
+  try {
+    const imageKey = getPathParameter(event, "imageKey");
+
+    if (!imageKey) {
+      return createResponse(400, {
+        error: "Image key is required",
+        message: "Please provide the S3 key of the image to delete",
+      });
+    }
+
+    console.log(`Deleting image with key: ${imageKey}`);
+
+    // Delete from S3
+    const deleteResult = await imageService.deleteImage(imageKey);
+
+    console.log("Image deleted successfully:", deleteResult);
+
+    return createResponse(200, {
+      message: "Image deleted successfully",
+      key: imageKey,
+    });
+  } catch (error) {
+    console.error("Error deleting product image:", error);
+
+    // Handle specific S3 errors
+    if (error.name === "NoSuchKey") {
+      return createResponse(404, {
+        error: "Image not found",
+        message: "The specified image does not exist",
+      });
+    }
+
+    return handleError(error);
   }
 };
