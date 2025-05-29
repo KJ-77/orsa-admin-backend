@@ -14,13 +14,13 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
+  "type": "commonjs",  "dependencies": {
     "dotenv": "^16.5.0",
-    "mysql2": "^3.14.1"
-  },
-  "devDependencies": {
-    "serverless-offline": "^14.4.0",
+    "mysql2": "^3.14.1",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "uuid": "^9.0.0"
+  },  "devDependencies": {
+    "serverless-offline": "^13.8.0",
     "serverless-plugin-aws-alerts": "^1.7.5"
   }
 }
