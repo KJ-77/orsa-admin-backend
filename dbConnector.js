@@ -20,13 +20,13 @@ const initializePool = async () => {
     // Close existing pool if it exists
     if (pool) {
       await pool.end();
-      console.log('Closed existing database connection pool');
+      console.log("Closed existing database connection pool");
     }
 
     // Get current database configuration (from Secrets Manager or env vars)
     const dbConfig = await getDbConfig();
-    
-    console.log('Initializing database connection pool with config:', {
+
+    console.log("Initializing database connection pool with config:", {
       host: dbConfig.host,
       user: dbConfig.user,
       database: dbConfig.database,
@@ -51,11 +51,10 @@ const initializePool = async () => {
       connectTimeout: 20000, // 20 seconds
     });
 
-    console.log('Database connection pool initialized successfully');
+    console.log("Database connection pool initialized successfully");
     return pool;
-    
   } catch (error) {
-    console.error('Error initializing database connection pool:', error);
+    console.error("Error initializing database connection pool:", error);
     throw error;
   }
 };
@@ -80,26 +79,30 @@ const executeQuery = async (sql, params = []) => {
     const [results] = await pool.execute(sql, params);
     console.log(`Query executed successfully`);
     return results;
-    
   } catch (error) {
     console.error("Database query error:", error);
 
     // Check for authentication errors that might indicate password rotation
     if (error.code === "ER_ACCESS_DENIED_ERROR") {
-      console.log("Access denied error detected - attempting to refresh credentials and reconnect");
+      console.log(
+        "Access denied error detected - attempting to refresh credentials and reconnect"
+      );
       try {
         // Clear the secrets cache and reinitialize the pool
         const { clearCache } = require("./secretsManager");
         clearCache();
         await initializePool();
-        
+
         // Retry the query with new credentials
         console.log("Retrying query with refreshed credentials");
         const [results] = await pool.execute(sql, params);
         console.log("Query succeeded after credential refresh");
         return results;
       } catch (retryError) {
-        console.error("Query failed even after credential refresh:", retryError);
+        console.error(
+          "Query failed even after credential refresh:",
+          retryError
+        );
         throw retryError;
       }
     }
@@ -137,7 +140,7 @@ const closePool = async () => {
   if (pool) {
     await pool.end();
     pool = null;
-    console.log('Database connection pool closed');
+    console.log("Database connection pool closed");
   }
 };
 

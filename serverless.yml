@@ -55,7 +55,7 @@ provider:
     # Set DB_SECRET_ID to your secret ARN or name to use Secrets Manager
     # DB_SECRET_ID: "arn:aws:secretsmanager:eu-west-3:YOUR_ACCOUNT:secret:rds-db-credentials/cluster-XXXXX/admin-XXXXXX"
     # DB_SECRET_ID: "rds-db-credentials/orsa-database"  # Or just the secret name
-    
+
     # Option 2: Use environment variables (Fallback)
     # These will be used if DB_SECRET_ID is not set
     DB_HOST: "orsa-ecommerce.cjkwgkcwoyr0.eu-west-3.rds.amazonaws.com"
@@ -63,10 +63,10 @@ provider:
     DB_PASSWORD: ".c>0VXNH0_JA4Qa)vy(PeI5Ijw#R"
     DB_NAME: "Orsa"
     DB_PORT: "3306"
-    
+
     # S3 bucket for product images
     S3_BUCKET_NAME: "${self:service}-product-images-${self:provider.stage}"
-    S3_REGION: "${self:provider.region}"  # IAM role permissions
+    S3_REGION: "${self:provider.region}" # IAM role permissions
   iam:
     role:
       statements:
@@ -84,7 +84,7 @@ provider:
           Action:
             - secretsmanager:GetSecretValue
             - secretsmanager:DescribeSecret
-          Resource: 
+          Resource:
             - "arn:aws:secretsmanager:${self:provider.region}:*:secret:rds-db-credentials/*"
             - "arn:aws:secretsmanager:${self:provider.region}:*:secret:orsa-database*"
             - "arn:aws:secretsmanager:${self:provider.region}:*:secret:orsa-db*"
