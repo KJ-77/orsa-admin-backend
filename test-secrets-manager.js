@@ -6,6 +6,10 @@
 const { getDbConfig, clearCache } = require("./secretsManager");
 const { executeQuery, initializePool, closePool } = require("./dbConnector");
 
+// Set AWS profile for testing
+process.env.AWS_PROFILE = "orsa";
+process.env.AWS_REGION = "eu-west-3";
+
 async function testSecretsManager() {
   try {
     console.log("🔐 Testing AWS Secrets Manager Integration\n");

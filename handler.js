@@ -524,7 +524,7 @@ exports.getTotalPrice = async (event) => {
  */
 exports.testDbConnection = async (event) => {
   const mysql = require("mysql2/promise");
-  const config = require("./config");
+  const { getDbConfig } = require("./secretsManager");
   const { networkInterfaces } = require("os");
   const dns = require("dns").promises;
   const net = require("net");
@@ -539,17 +539,23 @@ exports.testDbConnection = async (event) => {
   };
 
   try {
-    // 1. Check environment variables
+    // 1. Get database configuration from Secrets Manager
+    console.log("🔐 Getting database configuration from Secrets Manager...");
+    const dbConfig = await getDbConfig();
+    console.log("✅ Database configuration retrieved");
+
+    // 2. Check environment variables
     results.environment = {
-      dbHost: config.db.host,
-      dbUser: config.db.user,
-      dbName: config.db.database,
-      dbPort: config.db.port,
+      dbHost: dbConfig.host,
+      dbUser: dbConfig.user,
+      dbName: dbConfig.database,
+      dbPort: dbConfig.port,
       nodeEnv: process.env.NODE_ENV,
-      hasDbPassword: !!config.db.password,
+      hasDbPassword: !!dbConfig.password,
       awsRegion: process.env.AWS_REGION,
       lambdaFunctionName: process.env.AWS_LAMBDA_FUNCTION_NAME,
       lambdaFunctionVersion: process.env.AWS_LAMBDA_FUNCTION_VERSION,
+      dbSecretId: process.env.DB_SECRET_ID,
     };
 
     results.diagnostics.push("✅ Environment variables collected");
@@ -569,30 +575,25 @@ exports.testDbConnection = async (event) => {
       results.diagnostics.push(
         `❌ Error getting network interfaces: ${err.message}`
       );
-    }
-
-    // 3. Try DNS lookup of database host
+    } // 3. Try DNS lookup of database host
     try {
-      const dnsResult = await dns.lookup(config.db.host);
+      const dnsResult = await dns.lookup(dbConfig.host);
       results.network.dnsLookup = dnsResult;
       results.diagnostics.push(
-        `✅ DNS lookup successful: ${config.db.host} -> ${dnsResult.address}`
+        `✅ DNS lookup successful: ${dbConfig.host} -> ${dnsResult.address}`
       );
 
       // 3.5 Try TCP connection to the database port
       try {
         const tcpTest = await new Promise((resolve, reject) => {
-          const socket = net.createConnection(
-            config.db.port,
-            dnsResult.address
-          );
+          const socket = net.createConnection(dbConfig.port, dnsResult.address);
           let success = false;
 
           socket.setTimeout(5000); // 5 second timeout
 
           socket.on("connect", () => {
             results.diagnostics.push(
-              `✅ TCP connection successful to ${dnsResult.address}:${config.db.port}`
+              `✅ TCP connection successful to ${dnsResult.address}:${dbConfig.port}`
             );
             success = true;
             socket.end();
@@ -600,7 +601,7 @@ exports.testDbConnection = async (event) => {
 
           socket.on("timeout", () => {
             results.diagnostics.push(
-              `❌ TCP connection timed out to ${dnsResult.address}:${config.db.port}`
+              `❌ TCP connection timed out to ${dnsResult.address}:${dbConfig.port}`
             );
             socket.destroy();
           });
@@ -622,18 +623,18 @@ exports.testDbConnection = async (event) => {
       }
     } catch (err) {
       results.diagnostics.push(
-        `❌ DNS lookup failed for ${config.db.host}: ${err.message}`
+        `❌ DNS lookup failed for ${dbConfig.host}: ${err.message}`
       );
     }
 
     // 4. Try to connect to database
     try {
       const connection = await mysql.createConnection({
-        host: config.db.host,
-        user: config.db.user,
-        password: config.db.password,
-        database: config.db.database,
-        port: config.db.port,
+        host: dbConfig.host,
+        user: dbConfig.user,
+        password: dbConfig.password,
+        database: dbConfig.database,
+        port: dbConfig.port,
         connectTimeout: 10000, // 10s timeout
       });
 

@@ -13,48 +13,44 @@ provider:
   runtime: nodejs20.x
   region: eu-west-3
   stage: ${opt:stage, 'dev'}
+  profile: orsa # Use the orsa AWS profile for deployment
   httpApi:
-    cors:
-      allowedOrigins:
-        - "https://orsa-admin.vercel.app"
-        - "http://localhost:3000" # For local development
-      allowedHeaders:
-        - Content-Type # Essential for JSON requests
-        - Authorization # For authentication tokens
-        - X-Requested-With # Common for AJAX/fetch requests
-        - X-Api-Key # If you plan to use API keys
-        - Accept # For content negotiation
-        - X-Filename # For binary uploads with filename
-      allowedMethods:
-        - GET
-        - POST
-        - PUT
-        - DELETE
-        - OPTIONS
-      allowCredentials: true
-      exposedHeaders:
-        - X-Total-Count # For pagination in your product/order lists
-        - X-Rate-Limit # If you implement rate limiting
-        - Content-Range # For range queries
-      maxAge: 86400 # 24 hours
-    # Enable binary media types for image uploads
-    payload: "2.0"
-    disableDefaultEndpoint: false
+      cors:
+        allowedOrigins:
+          - "https://orsa-admin.vercel.app"
+          - "http://localhost:3000" # For local development
+        allowedHeaders:
+          - Content-Type # Essential for JSON requests
+          - Authorization # For authentication tokens
+          - X-Requested-With # Common for AJAX/fetch requests
+          - X-Api-Key # If you plan to use API keys
+          - Accept # For content negotiation
+          - X-Filename # For binary uploads with filename
+        allowedMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        allowCredentials: true
+        maxAge: 86400 # 24 hours
+      # Enable binary media types for image uploads
+      payload: "2.0"
+      disableDefaultEndpoint: false
 
   # VPC Configuration to access private RDS database
   # You need to update these with your actual VPC, subnet, and security group IDs
   vpc:
     securityGroupIds:
-      - sg-06745c25a3b52833b # Replace with your RDS security group ID    subnetIds:
+      - sg-06745c25a3b52833b # Replace with your RDS security group ID    
+    subnetIds:
       - subnet-0c6d5836c444e066b # Replace with private subnet IDs
       - subnet-028206bbed10db409
-      - subnet-0092491643bdfa079
-  # Configure environment variables (these will be available in Lambda)
+      - subnet-0092491643bdfa079 # Configure environment variables (these will be available in Lambda)
   environment:
     # Option 1: Use Secrets Manager (Recommended for production)
     # Set DB_SECRET_ID to your secret ARN or name to use Secrets Manager
-    # DB_SECRET_ID: "arn:aws:secretsmanager:eu-west-3:YOUR_ACCOUNT:secret:rds-db-credentials/cluster-XXXXX/admin-XXXXXX"
-    # DB_SECRET_ID: "rds-db-credentials/orsa-database"  # Or just the secret name
+    DB_SECRET_ID: "rds!db-9a50aa73-8600-4fd7-ac67-596f2d27da20"
 
     # Option 2: Use environment variables (Fallback)
     # These will be used if DB_SECRET_ID is not set
@@ -78,16 +74,22 @@ provider:
             - ec2:DeleteNetworkInterface
             - ec2:AssignPrivateIpAddresses
             - ec2:UnassignPrivateIpAddresses
-          Resource: "*"
-        # Allow Lambda to access Secrets Manager for database credentials
+          Resource: "*" # Allow Lambda to access Secrets Manager for database credentials
         - Effect: Allow
           Action:
             - secretsmanager:GetSecretValue
             - secretsmanager:DescribeSecret
           Resource:
+            - "arn:aws:secretsmanager:${self:provider.region}:*:secret:rds!db-9a50aa73-8600-4fd7-ac67-596f2d27da20*"
+            - "arn:aws:secretsmanager:${self:provider.region}:*:secret:rds!db-*"
             - "arn:aws:secretsmanager:${self:provider.region}:*:secret:rds-db-credentials/*"
             - "arn:aws:secretsmanager:${self:provider.region}:*:secret:orsa-database*"
             - "arn:aws:secretsmanager:${self:provider.region}:*:secret:orsa-db*"
+        # Allow listing secrets for debugging RDS-managed secrets
+        - Effect: Allow
+          Action:
+            - secretsmanager:ListSecrets
+          Resource: "*"
         # Allow Lambda to access S3 for product images
         - Effect: Allow
           Action:
@@ -110,7 +112,7 @@ package:
 
 # Custom configurations if needed
 custom:
-  timeout: 30 # Default timeout for all functions (30 seconds)
+  timeout: 25 # Default timeout for all functions (25 seconds to stay under HTTP API limit)
 
 functions:
   # Test function to debug connectivity and permissions
