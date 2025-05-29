@@ -49,21 +49,24 @@ provider:
       - subnet-0c6d5836c444e066b # Replace with private subnet IDs
       - subnet-028206bbed10db409
       - subnet-0092491643bdfa079
-
   # Configure environment variables (these will be available in Lambda)
-  # Note: We're using hardcoded values for now. In production, use secure ways to handle credentials
-  # such as AWS Systems Manager Parameter Store or AWS Secrets Manager
   environment:
-    # Update these values with your actual database information
-    DB_HOST: "orsa-ecommerce.cjkwgkcwoyr0.eu-west-3.rds.amazonaws.com" # UPDATE THIS
-    DB_USER: "admin" # UPDATE THIS if different
-    DB_PASSWORD: ".c>0VXNH0_JA4Qa)vy(PeI5Ijw#R" # UPDATE THIS
+    # Option 1: Use Secrets Manager (Recommended for production)
+    # Set DB_SECRET_ID to your secret ARN or name to use Secrets Manager
+    # DB_SECRET_ID: "arn:aws:secretsmanager:eu-west-3:YOUR_ACCOUNT:secret:rds-db-credentials/cluster-XXXXX/admin-XXXXXX"
+    # DB_SECRET_ID: "rds-db-credentials/orsa-database"  # Or just the secret name
+    
+    # Option 2: Use environment variables (Fallback)
+    # These will be used if DB_SECRET_ID is not set
+    DB_HOST: "orsa-ecommerce.cjkwgkcwoyr0.eu-west-3.rds.amazonaws.com"
+    DB_USER: "admin"
+    DB_PASSWORD: ".c>0VXNH0_JA4Qa)vy(PeI5Ijw#R"
     DB_NAME: "Orsa"
     DB_PORT: "3306"
+    
     # S3 bucket for product images
     S3_BUCKET_NAME: "${self:service}-product-images-${self:provider.stage}"
-    S3_REGION: "${self:provider.region}"
-  # IAM role permissions
+    S3_REGION: "${self:provider.region}"  # IAM role permissions
   iam:
     role:
       statements:
@@ -75,7 +78,17 @@ provider:
             - ec2:DeleteNetworkInterface
             - ec2:AssignPrivateIpAddresses
             - ec2:UnassignPrivateIpAddresses
-          Resource: "*" # Allow Lambda to access S3 for product images
+          Resource: "*"
+        # Allow Lambda to access Secrets Manager for database credentials
+        - Effect: Allow
+          Action:
+            - secretsmanager:GetSecretValue
+            - secretsmanager:DescribeSecret
+          Resource: 
+            - "arn:aws:secretsmanager:${self:provider.region}:*:secret:rds-db-credentials/*"
+            - "arn:aws:secretsmanager:${self:provider.region}:*:secret:orsa-database*"
+            - "arn:aws:secretsmanager:${self:provider.region}:*:secret:orsa-db*"
+        # Allow Lambda to access S3 for product images
         - Effect: Allow
           Action:
             - s3:PutObject
