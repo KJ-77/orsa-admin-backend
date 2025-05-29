@@ -75,7 +75,7 @@ const handleError = (error) => {
     });
   } else {
     return createResponse(500, {
-      error: "Internal server error",
+      error: "Internal server error...",
       message: error.message || "An unexpected error occurred",
     });
   }

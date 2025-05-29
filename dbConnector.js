@@ -3,16 +3,22 @@
  * This module handles MySQL database connections using connection pooling
  * for improved performance and resource management.
  */
-
 const mysql = require("mysql2/promise");
 require("dotenv").config();
 const config = require("./config");
 
+ try {
+    credentials = await config.getDbCredentials();
+  } catch (error) {
+    console.warn("Using fallback credentials from config");
+    credentials = { username: config.db.user, password: config.db.password };
+  }
+
 // Create a connection pool to efficiently manage database connections
 const pool = mysql.createPool({
   host: config.db.host,
-  user: config.db.user,
-  password: config.db.password,
+  user: credentials.username || config.db.user,
+  password: credentials.password || config.db.password,
   database: config.db.database,
   port: config.db.port,
   // Connection pool settings

@@ -13,6 +13,7 @@ provider:
   runtime: nodejs20.x
   region: eu-west-3
   stage: ${opt:stage, 'dev'}
+  profile: orsa
   httpApi:
     cors:
       allowedOrigins:
@@ -32,10 +33,10 @@ provider:
         - DELETE
         - OPTIONS
       allowCredentials: true
-      exposedHeaders:
-        - X-Total-Count # For pagination in your product/order lists
-        - X-Rate-Limit # If you implement rate limiting
-        - Content-Range # For range queries
+      # exposedHeaders:
+      #   - X-Total-Count # For pagination in your product/order lists
+      #   - X-Rate-Limit # If you implement rate limiting
+      #   - Content-Range # For range queries
       maxAge: 86400 # 24 hours
     # Enable binary media types for image uploads
     payload: "2.0"
@@ -45,7 +46,8 @@ provider:
   # You need to update these with your actual VPC, subnet, and security group IDs
   vpc:
     securityGroupIds:
-      - sg-06745c25a3b52833b # Replace with your RDS security group ID    subnetIds:
+      - sg-06745c25a3b52833b # Replace with your RDS security group ID    
+    subnetIds:
       - subnet-0c6d5836c444e066b # Replace with private subnet IDs
       - subnet-028206bbed10db409
       - subnet-0092491643bdfa079
@@ -57,12 +59,14 @@ provider:
     # Update these values with your actual database information
     DB_HOST: "orsa-ecommerce.cjkwgkcwoyr0.eu-west-3.rds.amazonaws.com" # UPDATE THIS
     DB_USER: "admin" # UPDATE THIS if different
-    DB_PASSWORD: ".c>0VXNH0_JA4Qa)vy(PeI5Ijw#R" # UPDATE THIS
+    DB_PASSWORD: "[[E<fWsd0CK02s6O-b)>tjxi3Fnp" # Reference to Systems Manager Parameter Store
     DB_NAME: "Orsa"
     DB_PORT: "3306"
     # S3 bucket for product images
     S3_BUCKET_NAME: "${self:service}-product-images-${self:provider.stage}"
     S3_REGION: "${self:provider.region}"
+
+    DB_SECRET_ID: "rds!db-9a50aa73-8600-4fd7-ac67-596f2d27da20"
   # IAM role permissions
   iam:
     role:
@@ -76,6 +80,10 @@ provider:
             - ec2:AssignPrivateIpAddresses
             - ec2:UnassignPrivateIpAddresses
           Resource: "*" # Allow Lambda to access S3 for product images
+        - Effect: Allow
+          Action:
+            - secretsmanager:GetSecretValue
+          Resource: "*"
         - Effect: Allow
           Action:
             - s3:PutObject
