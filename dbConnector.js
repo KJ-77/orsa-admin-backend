@@ -7,29 +7,37 @@ const mysql = require("mysql2/promise");
 require("dotenv").config();
 const config = require("./config");
 
- try {
+let credentials;
+let pool;
+
+// Initialize database connection
+async function initializeDB() {
+  try {
     credentials = await config.getDbCredentials();
   } catch (error) {
     console.warn("Using fallback credentials from config");
     credentials = { username: config.db.user, password: config.db.password };
   }
 
-// Create a connection pool to efficiently manage database connections
-const pool = mysql.createPool({
-  host: config.db.host,
-  user: credentials.username || config.db.user,
-  password: credentials.password || config.db.password,
-  database: config.db.database,
-  port: config.db.port,
-  // Connection pool settings
-  waitForConnections: true, // Wait for a connection to become available
-  connectionLimit: 10, // Maximum number of connections in the pool
-  queueLimit: 0, // Maximum number of connection requests to queue (0 = unlimited)
-  maxIdle: 10, // max idle connections, the default value is the same as `connectionLimit`
-  enableKeepAlive: true, // Enable TCP Keep-Alive packets,
-  // Set a longer connection timeout for slow VPC connections
-  connectTimeout: 20000, // 20 seconds
-});
+  // Create a connection pool to efficiently manage database connections
+  pool = mysql.createPool({
+    host: config.db.host,
+    user: credentials.username || config.db.user,    password: credentials.password || config.db.password,
+    database: config.db.database,
+    port: config.db.port,
+    // Connection pool settings
+    waitForConnections: true, // Wait for a connection to become available
+    connectionLimit: 10, // Maximum number of connections in the pool
+    queueLimit: 0, // Maximum number of connection requests to queue (0 = unlimited)
+    maxIdle: 10, // max idle connections, the default value is the same as `connectionLimit`
+    enableKeepAlive: true, // Enable TCP Keep-Alive packets,
+    // Set a longer connection timeout for slow VPC connections
+    connectTimeout: 20000, // 20 seconds
+  });
+}
+
+// Initialize the database connection
+let dbInitialized = false;
 
 /**
  * Function to execute queries with auto-reconnection capability
@@ -39,6 +47,12 @@ const pool = mysql.createPool({
  */
 const executeQuery = async (sql, params = []) => {
   try {
+    // Ensure database is initialized
+    if (!dbInitialized) {
+      await initializeDB();
+      dbInitialized = true;
+    }
+
     // Log connection attempt for debugging
     console.log(
       `Attempting DB connection to ${config.db.host}:${config.db.port} as ${config.db.user}`
@@ -81,6 +95,7 @@ const executeQuery = async (sql, params = []) => {
 
 module.exports = {
   executeQuery,
-  // Expose the pool for transaction support
-  pool,
+  initializeDB,
+  // Expose the pool for transaction support (will be available after initialization)
+  get pool() { return pool; },
 };

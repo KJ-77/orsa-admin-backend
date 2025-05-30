@@ -66,11 +66,20 @@ provider:
     S3_BUCKET_NAME: "${self:service}-product-images-${self:provider.stage}"
     S3_REGION: "${self:provider.region}"
 
-    DB_SECRET_ID: "rds!db-9a50aa73-8600-4fd7-ac67-596f2d27da20"
-  # IAM role permissions
+    DB_SECRET_ID: "rds!db-9a50aa73-8600-4fd7-ac67-596f2d27da20"  # IAM role permissions
   iam:
     role:
       statements:
+        - Effect: Allow
+          Action:
+            - secretsmanager:GetSecretValue
+          Resource: "arn:aws:secretsmanager:eu-west-3:*:secret:rds!db-9a50aa73-8600-4fd7-ac67-596f2d27da20*"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:eu-west-3:*:*"
         # Allow Lambda to access VPC resources (RDS)
         - Effect: Allow
           Action:
@@ -116,6 +125,15 @@ functions:
           path: /test-connection
           method: get
     timeout: 60 # Longer timeout for debugging
+    
+  # Test function for Secrets Manager
+  testSecretsManager:
+    handler: handler.testSecretsManager
+    events:
+      - httpApi:
+          path: /test-secrets
+          method: get
+    timeout: 30
   # Product endpoints
   getProducts:
     handler: handler.getProducts
@@ -254,13 +272,21 @@ functions:
           path: /products/images/upload
           method: post
     timeout: 60 # Longer timeout for file uploads
-
   deleteProductImage:
     handler: handler.deleteProductImage
     events:
       - httpApi:
           path: /products/images/{imageKey}
           method: delete
+    timeout: ${self:custom.timeout}
+
+  # API Documentation endpoint
+  getApiDocumentation:
+    handler: handler.getApiDocumentation
+    events:
+      - httpApi:
+          path: /api/docs
+          method: get
     timeout: ${self:custom.timeout}
 
 # AWS Resources

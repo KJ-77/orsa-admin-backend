@@ -18,8 +18,15 @@ const getDbCredentials = async () => {
         VersionStage: "AWSCURRENT",
       })
     );
+      const secretData = JSON.parse(response.SecretString);
     
-    dbCredentials = JSON.parse(response.SecretString);
+    // Map the secret fields to expected format
+    dbCredentials = {
+      username: secretData.username, // or secretData.user if RDS auto-rotation
+      password: secretData.password
+    };
+    
+    console.log("Successfully retrieved credentials from Secrets Manager");
     return dbCredentials;
   } catch (error) {
     console.error("Failed to retrieve database credentials from Secrets Manager:", error);
