@@ -45,7 +45,7 @@ provider:
   # You need to update these with your actual VPC, subnet, and security group IDs
   vpc:
     securityGroupIds:
-      - sg-06745c25a3b52833b # Replace with your RDS security group ID    
+      - sg-06745c25a3b52833b # Replace with your RDS security group ID
     subnetIds:
       - subnet-0c6d5836c444e066b # Replace with private subnet IDs
       - subnet-028206bbed10db409
@@ -253,6 +253,58 @@ functions:
     events:
       - httpApi:
           path: /products/images/{imageKey}
+          method: delete
+    timeout: ${self:custom.timeout}
+
+  # Product Image Database Record endpoints
+  getProductImages:
+    handler: handler.getProductImages
+    events:
+      - httpApi:
+          path: /products/{productId}/images
+          method: get
+      - httpApi:
+          path: /products/images/{imageId}
+          method: get
+    timeout: ${self:custom.timeout}
+
+  createProductImageRecord:
+    handler: handler.createProductImageRecord
+    events:
+      - httpApi:
+          path: /products/images/record
+          method: post
+    timeout: ${self:custom.timeout}
+
+  updateProductImageRecord:
+    handler: handler.updateProductImageRecord
+    events:
+      - httpApi:
+          path: /products/images/record/{imageId}
+          method: put
+    timeout: ${self:custom.timeout}
+
+  setPrimaryProductImage:
+    handler: handler.setPrimaryProductImage
+    events:
+      - httpApi:
+          path: /products/{productId}/images/{imageId}/primary
+          method: put
+    timeout: ${self:custom.timeout}
+
+  deleteProductImageRecord:
+    handler: handler.deleteProductImageRecord
+    events:
+      - httpApi:
+          path: /products/images/record/{imageId}
+          method: delete
+    timeout: ${self:custom.timeout}
+
+  deleteProductImages:
+    handler: handler.deleteProductImages
+    events:
+      - httpApi:
+          path: /products/{productId}/images
           method: delete
     timeout: ${self:custom.timeout}
 

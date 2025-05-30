@@ -8,6 +8,7 @@ const productService = require("./productService");
 const userService = require("./userService");
 const orderService = require("./orderService");
 const imageService = require("./imageService");
+const productImageService = require("./productImageService");
 
 /**
  * Helper function to create a standardized API response
@@ -28,6 +29,37 @@ const createResponse = (statusCode, data) => {
 };
 
 /**
+ * Parse request body from event
+ * @param {string} body - The request body as a string
+ * @returns {Object} Parsed body as an object
+ */
+const parseBody = (body) => {
+  if (!body) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    throw new Error(`Invalid request body: ${error.message}`);
+  }
+};
+
+/**
+ * Get path parameter from event
+ * @param {Object} event - The Lambda event object
+ * @param {string} param - The name of the path parameter
+ * @returns {string|null} The path parameter value or null if not found
+ */
+const getPathParameter = (event, param) => {
+  if (!event.pathParameters) {
+    return null;
+  }
+
+  return event.pathParameters[param];
+};
+
+/**
  * Generic error handler for API requests
  * @param {Error} error - The error object
  * @returns {Object} Error response
@@ -44,65 +76,29 @@ const handleError = (error) => {
     DB_NAME_DEFINED: !!process.env.DB_NAME,
   });
 
-  if (error.code === "ER_NO_SUCH_TABLE") {
-    return createResponse(500, {
-      error: "Database table does not exist",
-      message: error.message,
-    });
-  } else if (error.code === "ER_BAD_FIELD_ERROR") {
-    return createResponse(400, {
-      error: "Invalid field in request",
-      message: error.message,
-    });
-  } else if (error.code === "ER_DUP_ENTRY") {
+  // Handle specific database errors
+  if (error.code === "ER_DUP_ENTRY") {
     return createResponse(409, {
       error: "Duplicate entry",
-      message: error.message,
-    });
-  } else if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED") {
-    return createResponse(500, {
-      error: "Database connection failed",
-      message:
-        "Unable to connect to database. Please check connection settings and network.",
-      details: error.message,
-    });
-  } else if (error.code === "ER_ACCESS_DENIED_ERROR") {
-    return createResponse(500, {
-      error: "Database access denied",
-      message:
-        "Invalid database credentials. Please check your username and password.",
-      details: error.message,
-    });
-  } else {
-    return createResponse(500, {
-      error: "Internal server error",
-      message: error.message || "An unexpected error occurred",
+      message: "A record with this data already exists",
     });
   }
-};
 
-/**
- * Parse the request body safely
- * @param {string} body - The request body as a string
- * @returns {Object} Parsed body or empty object
- */
-const parseBody = (body) => {
-  try {
-    return body ? JSON.parse(body) : {};
-  } catch (error) {
-    console.error("Error parsing request body:", error);
-    return {};
+  // Handle foreign key constraint errors
+  if (error.code === "ER_NO_REFERENCED_ROW") {
+    return createResponse(400, {
+      error: "Invalid reference",
+      message: "Referenced record does not exist",
+    });
   }
-};
 
-/**
- * Extract path parameters safely
- * @param {Object} event - API Gateway event
- * @param {string} paramName - The parameter name to extract
- * @returns {string|null} The parameter value or null
- */
-const getPathParameter = (event, paramName) => {
-  return event.pathParameters && event.pathParameters[paramName];
+  // Handle other specific errors as needed
+
+  // Default error response
+  return createResponse(500, {
+    error: "Server error",
+    message: error.message,
+  });
 };
 
 // ========== Product Handlers ==========
@@ -879,6 +875,269 @@ exports.deleteProductImage = async (event) => {
       });
     }
 
+    return handleError(error);
+  }
+};
+
+// ========== Product Image Info Handlers ==========
+
+/**
+ * Get all images for a product or a specific image by ID
+ * If imageId is provided, returns that specific image
+ * Otherwise, returns all images for the product with the given productId
+ */
+exports.getProductImages = async (event) => {
+  try {
+    // Get path parameters
+    const imageId = getPathParameter(event, "imageId");
+    const productId = getPathParameter(event, "productId");
+
+    // Get query parameters
+    const queryParams = event.queryStringParameters || {};
+    const primaryOnly = queryParams.primaryOnly === "true";
+
+    // Validate parameters
+    if (!imageId && !productId) {
+      return createResponse(400, {
+        error: "Missing parameters",
+        message: "Either imageId or productId must be provided",
+      });
+    }
+
+    // Get image(s)
+    let result;
+    if (imageId) {
+      // Get specific image
+      result = await productImageService.getProductImageById(imageId);
+
+      if (!result) {
+        return createResponse(404, {
+          error: "Image not found",
+          message: `No image found with ID ${imageId}`,
+        });
+      }
+    } else if (primaryOnly) {
+      // Get primary image only
+      result = await productImageService.getPrimaryProductImage(productId);
+
+      if (!result) {
+        return createResponse(404, {
+          error: "Primary image not found",
+          message: `No primary image found for product ID ${productId}`,
+        });
+      }
+    } else {
+      // Get all images for product
+      result = await productImageService.getProductImages(productId);
+    }
+
+    return createResponse(200, result);
+  } catch (error) {
+    console.error("Error getting product images:", error);
+    return handleError(error);
+  }
+};
+
+/**
+ * Create a new product image record in the database
+ * Note: This does not upload the actual image file to S3
+ * Use the uploadProductImage endpoint to upload files
+ */
+exports.createProductImageRecord = async (event) => {
+  try {
+    const body = parseBody(event.body);
+
+    // Validate required fields
+    if (!body.product_id) {
+      return createResponse(400, {
+        error: "Missing required fields",
+        message: "product_id is required",
+      });
+    }
+
+    if (!body.image_url || !body.image_key) {
+      return createResponse(400, {
+        error: "Missing required fields",
+        message: "image_url and image_key are required",
+      });
+    }
+
+    // Create image record
+    const result = await productImageService.createProductImage(body);
+
+    return createResponse(201, {
+      message: "Product image record created successfully",
+      imageId: result.insertId,
+    });
+  } catch (error) {
+    console.error("Error creating product image record:", error);
+    return handleError(error);
+  }
+};
+
+/**
+ * Update an existing product image record
+ */
+exports.updateProductImageRecord = async (event) => {
+  try {
+    const imageId = getPathParameter(event, "imageId");
+    const body = parseBody(event.body);
+
+    // Validate parameters
+    if (!imageId) {
+      return createResponse(400, {
+        error: "Missing parameters",
+        message: "imageId is required",
+      });
+    }
+
+    // Check if the image exists
+    const existingImage = await productImageService.getProductImageById(
+      imageId
+    );
+    if (!existingImage) {
+      return createResponse(404, {
+        error: "Image not found",
+        message: `No image found with ID ${imageId}`,
+      });
+    }
+
+    // Update image record
+    await productImageService.updateProductImage(imageId, body);
+
+    return createResponse(200, {
+      message: "Product image record updated successfully",
+      imageId: imageId,
+    });
+  } catch (error) {
+    console.error("Error updating product image record:", error);
+    return handleError(error);
+  }
+};
+
+/**
+ * Set a product image as the primary image
+ */
+exports.setPrimaryProductImage = async (event) => {
+  try {
+    const imageId = getPathParameter(event, "imageId");
+    const productId = getPathParameter(event, "productId");
+
+    // Validate parameters
+    if (!imageId || !productId) {
+      return createResponse(400, {
+        error: "Missing parameters",
+        message: "Both imageId and productId are required",
+      });
+    }
+
+    // Check if the image exists and belongs to the product
+    const existingImage = await productImageService.getProductImageById(
+      imageId
+    );
+    if (!existingImage) {
+      return createResponse(404, {
+        error: "Image not found",
+        message: `No image found with ID ${imageId}`,
+      });
+    }
+
+    if (existingImage.product_id != productId) {
+      return createResponse(400, {
+        error: "Invalid parameters",
+        message: `Image with ID ${imageId} does not belong to product with ID ${productId}`,
+      });
+    }
+
+    // Set as primary
+    await productImageService.setPrimaryProductImage(imageId, productId);
+
+    return createResponse(200, {
+      message: "Product image set as primary successfully",
+      imageId: imageId,
+      productId: productId,
+    });
+  } catch (error) {
+    console.error("Error setting primary product image:", error);
+    return handleError(error);
+  }
+};
+
+/**
+ * Delete a product image record and optionally the image file from S3
+ */
+exports.deleteProductImageRecord = async (event) => {
+  try {
+    const imageId = getPathParameter(event, "imageId");
+
+    // Get query parameters
+    const queryParams = event.queryStringParameters || {};
+    const deleteFromS3 = queryParams.deleteFromS3 !== "false"; // Default to true
+
+    // Validate parameters
+    if (!imageId) {
+      return createResponse(400, {
+        error: "Missing parameters",
+        message: "imageId is required",
+      });
+    }
+
+    // Check if the image exists
+    const existingImage = await productImageService.getProductImageById(
+      imageId
+    );
+    if (!existingImage) {
+      return createResponse(404, {
+        error: "Image not found",
+        message: `No image found with ID ${imageId}`,
+      });
+    }
+
+    // Delete image record and optionally the file from S3
+    await productImageService.deleteProductImage(imageId, deleteFromS3);
+
+    return createResponse(200, {
+      message: `Product image ${
+        deleteFromS3 ? "and file " : ""
+      }deleted successfully`,
+      imageId: imageId,
+    });
+  } catch (error) {
+    console.error("Error deleting product image:", error);
+    return handleError(error);
+  }
+};
+
+/**
+ * Delete all images for a product
+ */
+exports.deleteProductImages = async (event) => {
+  try {
+    const productId = getPathParameter(event, "productId");
+
+    // Get query parameters
+    const queryParams = event.queryStringParameters || {};
+    const deleteFromS3 = queryParams.deleteFromS3 !== "false"; // Default to true
+
+    // Validate parameters
+    if (!productId) {
+      return createResponse(400, {
+        error: "Missing parameters",
+        message: "productId is required",
+      });
+    }
+
+    // Delete all images for the product
+    await productImageService.deleteProductImages(productId, deleteFromS3);
+
+    return createResponse(200, {
+      message: `All product images ${
+        deleteFromS3 ? "and files " : ""
+      }deleted successfully`,
+      productId: productId,
+    });
+  } catch (error) {
+    console.error("Error deleting product images:", error);
     return handleError(error);
   }
 };
