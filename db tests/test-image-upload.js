@@ -45,10 +45,9 @@ function imageToBase64(imagePath) {
 }
 
 // Example usage with a test image
-async function testImageUpload() {
-  // Replace with your actual API Gateway endpoint
+async function testImageUpload() {  // Replace with your actual API Gateway endpoint
   const API_BASE_URL =
-    "https://your-api-id.execute-api.eu-west-3.amazonaws.com";
+    "https://rlg7ahwue7.execute-api.eu-west-3.amazonaws.com";
 
   // Example: upload a test image
   // You would replace this with an actual image file path

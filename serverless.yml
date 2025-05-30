@@ -13,18 +13,19 @@ provider:
   runtime: nodejs20.x
   region: eu-west-3
   stage: ${opt:stage, 'dev'}
+  profile: orsa
   httpApi:
     cors:
       allowedOrigins:
         - "https://orsa-admin.vercel.app"
-        - "http://localhost:3000" # For local development
+        - "http://localhost:3000" # For local development 
       allowedHeaders:
         - Content-Type # Essential for JSON requests
         - Authorization # For authentication tokens
         - X-Requested-With # Common for AJAX/fetch requests
         - X-Api-Key # If you plan to use API keys
         - Accept # For content negotiation
-        - X-Filename # For binary uploads with filename
+        - X-Filename # For binary uploads with filename      
       allowedMethods:
         - GET
         - POST
@@ -32,10 +33,6 @@ provider:
         - DELETE
         - OPTIONS
       allowCredentials: true
-      exposedHeaders:
-        - X-Total-Count # For pagination in your product/order lists
-        - X-Rate-Limit # If you implement rate limiting
-        - Content-Range # For range queries
       maxAge: 86400 # 24 hours
     # Enable binary media types for image uploads
     payload: "2.0"
@@ -98,7 +95,7 @@ package:
 
 # Custom configurations if needed
 custom:
-  timeout: 30 # Default timeout for all functions (30 seconds)
+  timeout: 25 # Default timeout for all functions (25 seconds, under HTTP API limit)
 
 functions:
   # Test function to debug connectivity and permissions
@@ -216,7 +213,6 @@ functions:
           path: /orders/{id}
           method: delete
     timeout: ${self:custom.timeout}
-
   getTotalPrice:
     handler: handler.getTotalPrice
     events:
@@ -224,7 +220,6 @@ functions:
           path: /orders/total-price
           method: get
     timeout: ${self:custom.timeout}
-
   # Order item endpoints
   addOrderItem:
     handler: handler.addOrderItem
@@ -233,20 +228,23 @@ functions:
           path: /orders/{id}/items
           method: post
     timeout: ${self:custom.timeout}
+
   removeOrderItem:
     handler: handler.removeOrderItem
     events:
       - httpApi:
           path: /orders/items/{itemId}
           method: delete
-    timeout: ${self:custom.timeout} # Product Image endpoints
+    timeout: ${self:custom.timeout}
+
+  # Product Image endpoints
   uploadProductImage:
     handler: handler.uploadProductImage
     events:
       - httpApi:
           path: /products/images/upload
           method: post
-    timeout: 60 # Longer timeout for file uploads
+    timeout: 30 # Reduced to match HTTP API limit
 
   deleteProductImage:
     handler: handler.deleteProductImage
