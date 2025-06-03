@@ -34,9 +34,6 @@ const pool = mysql.createPool({
 const executeQuery = async (sql, params = []) => {
   try {
     // Log connection attempt for debugging
-    console.log(
-      `Attempting DB connection to ${config.db.host}:${config.db.port} as ${config.db.user}`
-    );
 
     // Using the connection pool to automatically handle connections
     const [results] = await pool.execute(sql, params);
