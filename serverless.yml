@@ -18,14 +18,14 @@ provider:
     cors:
       allowedOrigins:
         - "https://orsa-admin.vercel.app"
-        - "http://localhost:3000" # For local development 
+        - "http://localhost:3000" # For local development
       allowedHeaders:
         - Content-Type # Essential for JSON requests
         - Authorization # For authentication tokens
         - X-Requested-With # Common for AJAX/fetch requests
         - X-Api-Key # If you plan to use API keys
         - Accept # For content negotiation
-        - X-Filename # For binary uploads with filename      
+        - X-Filename # For binary uploads with filename
       allowedMethods:
         - GET
         - POST
@@ -47,7 +47,6 @@ provider:
       - subnet-0c6d5836c444e066b # Replace with private subnet IDs
       - subnet-028206bbed10db409
       - subnet-0092491643bdfa079
-
   # Configure environment variables (these will be available in Lambda)
   # Note: We're using hardcoded values for now. In production, use secure ways to handle credentials
   # such as AWS Systems Manager Parameter Store or AWS Secrets Manager
@@ -61,6 +60,10 @@ provider:
     # S3 bucket for product images
     S3_BUCKET_NAME: "${self:service}-product-images-${self:provider.stage}"
     S3_REGION: "${self:provider.region}"
+    # Cognito configuration - UPDATE THESE VALUES
+    COGNITO_USER_POOL_ID: "${env:COGNITO_USER_POOL_ID, ''}" # Set this in your environment or replace with actual value
+    COGNITO_CLIENT_ID: "${env:COGNITO_CLIENT_ID, ''}" # Set this in your environment or replace with actual value
+    STAGE: "${self:provider.stage}"
   # IAM role permissions
   iam:
     role:
@@ -98,9 +101,14 @@ custom:
   timeout: 25 # Default timeout for all functions (25 seconds, under HTTP API limit)
 
 functions:
-  # Test function to debug connectivity and permissions
+  # Cognito Lambda Authorizer
+  cognitoAuthorizer:
+    handler: authService.authorizer
+    timeout:
+      30
+      # Test function to debug connectivity and permissions
   testDbConnection:
-    handler: handler.testDbConnection
+    handler: protectedHandler.testDbConnection
     events:
       - httpApi:
           path: /test-connection
@@ -108,7 +116,7 @@ functions:
     timeout: 60 # Longer timeout for debugging
   # Product endpoints
   getProducts:
-    handler: handler.getProducts
+    handler: protectedHandler.getProducts
     events:
       - httpApi:
           path: /products
@@ -119,7 +127,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   createProduct:
-    handler: handler.createProduct
+    handler: protectedHandler.createProduct
     events:
       - httpApi:
           path: /products
@@ -127,7 +135,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   updateProduct:
-    handler: handler.updateProduct
+    handler: protectedHandler.updateProduct
     events:
       - httpApi:
           path: /products/{id}
@@ -135,7 +143,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   deleteProduct:
-    handler: handler.deleteProduct
+    handler: protectedHandler.deleteProduct
     events:
       - httpApi:
           path: /products/{id}
@@ -144,7 +152,7 @@ functions:
 
   # User endpoints
   getUsers:
-    handler: handler.getUsers
+    handler: protectedHandler.getUsers
     events:
       - httpApi:
           path: /users
@@ -155,7 +163,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   createUser:
-    handler: handler.createUser
+    handler: protectedHandler.createUser
     events:
       - httpApi:
           path: /users
@@ -163,7 +171,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   updateUser:
-    handler: handler.updateUser
+    handler: protectedHandler.updateUser
     events:
       - httpApi:
           path: /users/{id}
@@ -171,7 +179,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   deleteUser:
-    handler: handler.deleteUser
+    handler: protectedHandler.deleteUser
     events:
       - httpApi:
           path: /users/{id}
@@ -180,7 +188,7 @@ functions:
 
   # Order endpoints
   getOrders:
-    handler: handler.getOrders
+    handler: protectedHandler.getOrders
     events:
       - httpApi:
           path: /orders
@@ -191,7 +199,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   createOrder:
-    handler: handler.createOrder
+    handler: protectedHandler.createOrder
     events:
       - httpApi:
           path: /orders
@@ -199,7 +207,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   updateOrder:
-    handler: handler.updateOrder
+    handler: protectedHandler.updateOrder
     events:
       - httpApi:
           path: /orders/{id}
@@ -207,14 +215,14 @@ functions:
     timeout: ${self:custom.timeout}
 
   deleteOrder:
-    handler: handler.deleteOrder
+    handler: protectedHandler.deleteOrder
     events:
       - httpApi:
           path: /orders/{id}
           method: delete
     timeout: ${self:custom.timeout}
   getTotalPrice:
-    handler: handler.getTotalPrice
+    handler: protectedHandler.getTotalPrice
     events:
       - httpApi:
           path: /orders/total-price
@@ -222,7 +230,7 @@ functions:
     timeout: ${self:custom.timeout}
   # Order item endpoints
   addOrderItem:
-    handler: handler.addOrderItem
+    handler: protectedHandler.addOrderItem
     events:
       - httpApi:
           path: /orders/{id}/items
@@ -230,7 +238,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   removeOrderItem:
-    handler: handler.removeOrderItem
+    handler: protectedHandler.removeOrderItem
     events:
       - httpApi:
           path: /orders/items/{itemId}
@@ -239,7 +247,7 @@ functions:
 
   # Product Image endpoints
   uploadProductImage:
-    handler: handler.uploadProductImage
+    handler: protectedHandler.uploadProductImage
     events:
       - httpApi:
           path: /products/images/upload
@@ -247,7 +255,7 @@ functions:
     timeout: 30 # Reduced to match HTTP API limit
 
   deleteProductImage:
-    handler: handler.deleteProductImage
+    handler: protectedHandler.deleteProductImage
     events:
       - httpApi:
           path: /products/images/{imageKey}
@@ -256,7 +264,7 @@ functions:
 
   # Product Image Database Record endpoints
   getProductImages:
-    handler: handler.getProductImages
+    handler: protectedHandler.getProductImages
     events:
       - httpApi:
           path: /products/{productId}/images
@@ -267,15 +275,14 @@ functions:
     timeout: ${self:custom.timeout}
 
   createProductImageRecord:
-    handler: handler.createProductImageRecord
+    handler: protectedHandler.createProductImageRecord
     events:
       - httpApi:
           path: /products/images/record
           method: post
     timeout: ${self:custom.timeout}
-
   updateProductImageRecord:
-    handler: handler.updateProductImageRecord
+    handler: protectedHandler.updateProductImageRecord
     events:
       - httpApi:
           path: /products/images/record/{imageId}
@@ -283,7 +290,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   setPrimaryProductImage:
-    handler: handler.setPrimaryProductImage
+    handler: protectedHandler.setPrimaryProductImage
     events:
       - httpApi:
           path: /products/{productId}/images/{imageId}/primary
@@ -291,7 +298,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   deleteProductImageRecord:
-    handler: handler.deleteProductImageRecord
+    handler: protectedHandler.deleteProductImageRecord
     events:
       - httpApi:
           path: /products/images/record/{imageId}
@@ -299,7 +306,7 @@ functions:
     timeout: ${self:custom.timeout}
 
   deleteProductImages:
-    handler: handler.deleteProductImages
+    handler: protectedHandler.deleteProductImages
     events:
       - httpApi:
           path: /products/{productId}/images

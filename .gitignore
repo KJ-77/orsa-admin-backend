@@ -3,3 +3,4 @@ node_modules
 .env
 config.js
 db tests
+s_*.js
