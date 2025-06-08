@@ -1,9 +1,16 @@
 /**
  * Authentication Middleware
  * Wraps Lambda handlers to enforce authentication
+ * Uses external auth service to avoid VPC connectivity issues
  */
 
 const { authenticate } = require("./authService");
+const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
+
+// Initialize Lambda client for invoking auth function
+const lambdaClient = new LambdaClient({
+  region: process.env.AWS_REGION || "eu-west-3",
+});
 
 /**
  * Create standardized API response
@@ -21,6 +28,58 @@ const createResponse = (statusCode, data) => {
     },
     body: JSON.stringify(data),
   };
+};
+
+/**
+ * Authenticate using external Lambda function (for VPC functions)
+ * @param {Object} event - Lambda event
+ * @returns {Promise<Object>} User object
+ */
+const authenticateExternal = async (event) => {
+  const functionName = `${process.env.SERVICE || "orsa-admin-backend"}-${
+    process.env.STAGE || "dev"
+  }-authenticateUser`;
+
+  try {
+    console.log(`Invoking external auth function: ${functionName}`);
+    console.log("Environment - SERVICE:", process.env.SERVICE, "STAGE:", process.env.STAGE);
+
+    const command = new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: "RequestResponse",
+      Payload: JSON.stringify(event),
+    });
+
+    const result = await lambdaClient.send(command);
+    
+    // Check for function invocation errors
+    if (result.FunctionError) {
+      console.error("Lambda function error:", result.FunctionError);
+      throw new Error(`External auth function error: ${result.FunctionError}`);
+    }
+
+    const responsePayload = new TextDecoder().decode(result.Payload);
+    console.log("Raw external auth response:", responsePayload);
+    
+    const response = JSON.parse(responsePayload);
+    console.log("Parsed external auth response:", response);
+
+    if (!response.body) {
+      throw new Error("Invalid response format from external auth function");
+    }
+
+    const body = JSON.parse(response.body);
+
+    if (response.statusCode !== 200 || !body.authenticated) {
+      throw new Error(body.message || "Authentication failed");
+    }
+
+    return body.user;
+  } catch (error) {
+    console.error("External authentication failed:", error.message);
+    console.error("Error details:", error);
+    throw error;
+  }
 };
 
 /**
@@ -43,10 +102,41 @@ const withAuth = (handler, options = {}) => {
       // Skip authentication for test endpoint in development
       if (options.skipAuth && process.env.STAGE === "dev") {
         return await handler(event, context);
-      }
+      }      // Determine authentication method
+      // For VPC functions, prefer external authentication
+      let user;
 
-      // Authenticate user
-      const user = await authenticate(event);
+      if (process.env.VPC_FUNCTION === "true" || options.useExternalAuth) {
+        console.log("Using external authentication for VPC function");
+        try {
+          user = await authenticateExternal(event);
+          console.log("External authentication successful");
+        } catch (externalAuthError) {
+          console.log("External authentication failed:", externalAuthError.message);
+          
+          // Fallback to direct authentication if external fails
+          console.log("Attempting direct authentication as fallback");
+          try {
+            user = await authenticate(event);
+            console.log("Direct authentication fallback successful");
+          } catch (directAuthError) {
+            console.error("Both external and direct authentication failed");
+            console.error("External error:", externalAuthError.message);
+            console.error("Direct error:", directAuthError.message);
+            throw externalAuthError; // Throw the original external auth error
+          }
+        }
+      } else {
+        // For non-VPC functions, use direct authentication
+        console.log("Using direct authentication for non-VPC function");
+        try {
+          user = await authenticate(event);
+          console.log("Direct authentication successful");
+        } catch (directAuthError) {
+          console.log("Direct authentication failed:", directAuthError.message);
+          throw directAuthError;
+        }
+      }
 
       // Add user information to event for handler access
       event.user = user;

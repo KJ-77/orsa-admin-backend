@@ -117,6 +117,51 @@ const response = await fetch("/api/products", {
 });
 ```
 
+### Token Validation Endpoints
+
+The API provides endpoints to validate JWT tokens:
+
+**Validate User Token:**
+
+```bash
+GET /auth/validate
+Authorization: Bearer <jwt-token>
+```
+
+**Validate Admin Token:**
+
+```bash
+GET /auth/validate-admin
+Authorization: Bearer <admin-jwt-token>
+```
+
+**Response (Success):**
+
+```json
+{
+  "message": "Token is valid",
+  "user": {
+    "sub": "user-uuid",
+    "email": "user@example.com",
+    "cognito:groups": ["users"]
+  },
+  "isAuthenticated": true,
+  "isAdmin": true // Only for admin validation endpoint
+}
+```
+
+**Testing with cURL:**
+
+```bash
+# Test user token
+curl -X GET "https://your-api.execute-api.eu-west-3.amazonaws.com/auth/validate" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Test admin token
+curl -X GET "https://your-api.execute-api.eu-west-3.amazonaws.com/auth/validate-admin" \
+  -H "Authorization: Bearer YOUR_ADMIN_JWT_TOKEN"
+```
+
 ### Error Responses
 
 **401 Unauthorized:**
@@ -382,6 +427,46 @@ npm run deploy
 
 Check CloudWatch logs for detailed authentication information.
 
+### Testing Authentication
+
+Use the provided test scripts after deployment:
+
+**Node.js Test Script:**
+
+```bash
+# Update tokens and API URL in test-auth.js
+node test-auth.js
+```
+
+**Bash Test Script:**
+
+```bash
+# Update tokens and API URL in test-auth.sh
+chmod +x test-auth.sh
+./test-auth.sh
+```
+
+**Manual Testing Steps:**
+
+1. Deploy the backend: `npm run deploy`
+2. Get your API Gateway URL from the deployment output
+3. Sign in to your frontend to get JWT tokens
+4. Test validation endpoints:
+   - `/auth/validate` - Should work with any valid token
+   - `/auth/validate-admin` - Should only work with admin tokens
+5. Test protected endpoints with different user types
+6. Verify CORS headers are included in responses
+
+**Expected Test Results:**
+
+- ✅ User token on `/auth/validate`: 200 OK
+- ✅ Admin token on `/auth/validate-admin`: 200 OK
+- ❌ User token on `/auth/validate-admin`: 403 Forbidden
+- ❌ No token on any protected endpoint: 401 Unauthorized
+- ✅ Valid token on `/products`: 200 OK with product data
+
+```
+
 ## Security Best Practices
 
 1. **Token Storage:** Use secure HTTP-only cookies or secure storage
@@ -398,3 +483,4 @@ Check CloudWatch logs for detailed authentication information.
 3. Implement password reset functionality
 4. Add MFA for enhanced security
 5. Set up monitoring and alerts
+```

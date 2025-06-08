@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "deploy": "serverless deploy",
+    "deploy-dev": "serverless deploy --stage dev",
+    "deploy-prod": "serverless deploy --stage prod",
+    "test-auth": "node test-auth.js",
+    "logs": "serverless logs -f",
+    "info": "serverless info",
+    "remove": "serverless remove"
+  }
+}

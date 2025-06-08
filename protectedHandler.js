@@ -12,6 +12,47 @@ const {
 // Import original handlers
 const originalHandler = require("./handler");
 
+// ========== Authentication Validation Endpoints ==========
+
+/**
+ * Validate JWT token and return user info
+ */
+exports.validateToken = withAuth(async (event, context) => {
+  return {
+    statusCode: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type,Authorization",
+      "Access-Control-Allow-Methods": "GET,OPTIONS",
+    },
+    body: JSON.stringify({
+      message: "Token is valid",
+      user: event.user,
+      isAuthenticated: true,
+    }),
+  };
+});
+
+/**
+ * Validate admin token and return admin info
+ */
+exports.validateAdminToken = withAdminAuth(async (event, context) => {
+  return {
+    statusCode: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Content-Type,Authorization",
+      "Access-Control-Allow-Methods": "GET,OPTIONS",
+    },
+    body: JSON.stringify({
+      message: "Admin token is valid",
+      user: event.user,
+      isAuthenticated: true,
+      isAdmin: true,
+    }),
+  };
+});
+
 // ========== Public Endpoints (No Authentication Required) ==========
 
 /**

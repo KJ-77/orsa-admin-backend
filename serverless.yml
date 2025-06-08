@@ -37,16 +37,9 @@ provider:
     # Enable binary media types for image uploads
     payload: "2.0"
     disableDefaultEndpoint: false
-
-  # VPC Configuration to access private RDS database
-  # You need to update these with your actual VPC, subnet, and security group IDs
-  vpc:
-    securityGroupIds:
-      - sg-06745c25a3b52833b # Replace with your RDS security group ID
-    subnetIds:
-      - subnet-0c6d5836c444e066b # Replace with private subnet IDs
-      - subnet-028206bbed10db409
-      - subnet-0092491643bdfa079
+  # VPC Configuration moved to individual functions that need database access
+  # Authentication functions (validateToken, validateAdminToken, cognitoAuthorizer)
+  # are kept outside VPC to access Cognito service
   # Configure environment variables (these will be available in Lambda)
   # Note: We're using hardcoded values for now. In production, use secure ways to handle credentials
   # such as AWS Systems Manager Parameter Store or AWS Secrets Manager
@@ -56,15 +49,14 @@ provider:
     DB_USER: "admin" # UPDATE THIS if different
     DB_PASSWORD: "[[E<fWsd0CK02s6O-b)>tjxi3Fnp" # UPDATE THIS
     DB_NAME: "Orsa"
-    DB_PORT: "3306"
-    # S3 bucket for product images
+    DB_PORT: "3306" # S3 bucket for product images
     S3_BUCKET_NAME: "${self:service}-product-images-${self:provider.stage}"
     S3_REGION: "${self:provider.region}"
-    # Cognito configuration - UPDATE THESE VALUES
-    COGNITO_USER_POOL_ID: "${env:COGNITO_USER_POOL_ID, ''}" # Set this in your environment or replace with actual value
-    COGNITO_CLIENT_ID: "${env:COGNITO_CLIENT_ID, ''}" # Set this in your environment or replace with actual value
-    STAGE: "${self:provider.stage}"
-  # IAM role permissions
+    # Cognito configuration - HARDCODED VALUES
+    COGNITO_USER_POOL_ID: "eu-west-3_hjGfLZ4ek"
+    COGNITO_CLIENT_ID: "28esv8q77dl3r2goi1mskl0ilb"
+    COGNITO_REGION: "eu-west-3"
+    STAGE: "${self:provider.stage}"  # IAM role permissions
   iam:
     role:
       statements:
@@ -76,7 +68,13 @@ provider:
             - ec2:DeleteNetworkInterface
             - ec2:AssignPrivateIpAddresses
             - ec2:UnassignPrivateIpAddresses
-          Resource: "*" # Allow Lambda to access S3 for product images
+          Resource: "*"
+        # Allow Lambda-to-Lambda invocation for external authentication
+        - Effect: Allow
+          Action:
+            - lambda:InvokeFunction
+          Resource: "arn:aws:lambda:${self:provider.region}:*:function:${self:service}-${self:provider.stage}-authenticateUser"
+        # Allow Lambda to access S3 for product images
         - Effect: Allow
           Action:
             - s3:PutObject
@@ -100,13 +98,46 @@ package:
 custom:
   timeout: 25 # Default timeout for all functions (25 seconds, under HTTP API limit)
 
+  # VPC configuration for functions that need database access
+  vpcConfig:
+    securityGroupIds:
+      - sg-06745c25a3b52833b # RDS security group ID
+    subnetIds:
+      - subnet-0c6d5836c444e066b # Private subnet IDs
+      - subnet-028206bbed10db409
+      - subnet-0092491643bdfa079
+
 functions:
+  # Dedicated authentication function (outside VPC for Cognito access)
+  authenticateUser:
+    handler: authHandler.authenticateUser
+    timeout: 30
+    environment:
+      SERVICE: ${self:service}
+      STAGE: ${self:provider.stage}
+
   # Cognito Lambda Authorizer
   cognitoAuthorizer:
-    handler: authService.authorizer
-    timeout:
-      30
-      # Test function to debug connectivity and permissions
+    handler: authHandler.authorizer
+    timeout: 30
+
+  # Authentication validation endpoints
+  validateToken:
+    handler: protectedHandler.validateToken
+    events:
+      - httpApi:
+          path: /auth/validate
+          method: get
+    timeout: ${self:custom.timeout}
+
+  validateAdminToken:
+    handler: protectedHandler.validateAdminToken
+    events:
+      - httpApi:
+          path: /auth/validate-admin
+          method: get
+    timeout: ${self:custom.timeout}
+  # Test function to debug connectivity and permissions
   testDbConnection:
     handler: protectedHandler.testDbConnection
     events:
@@ -114,7 +145,7 @@ functions:
           path: /test-connection
           method: get
     timeout: 60 # Longer timeout for debugging
-  # Product endpoints
+    vpc: ${self:custom.vpcConfig} # Product endpoints
   getProducts:
     handler: protectedHandler.getProducts
     events:
@@ -125,6 +156,11 @@ functions:
           path: /products/{id}
           method: get
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
+    environment:
+      VPC_FUNCTION: "true"
+      SERVICE: ${self:service}
+      STAGE: ${self:provider.stage}
 
   createProduct:
     handler: protectedHandler.createProduct
@@ -133,6 +169,7 @@ functions:
           path: /products
           method: post
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   updateProduct:
     handler: protectedHandler.updateProduct
@@ -141,6 +178,7 @@ functions:
           path: /products/{id}
           method: put
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   deleteProduct:
     handler: protectedHandler.deleteProduct
@@ -149,7 +187,7 @@ functions:
           path: /products/{id}
           method: delete
     timeout: ${self:custom.timeout}
-
+    vpc: ${self:custom.vpcConfig}
   # User endpoints
   getUsers:
     handler: protectedHandler.getUsers
@@ -161,6 +199,7 @@ functions:
           path: /users/{id}
           method: get
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   createUser:
     handler: protectedHandler.createUser
@@ -169,6 +208,7 @@ functions:
           path: /users
           method: post
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   updateUser:
     handler: protectedHandler.updateUser
@@ -177,6 +217,7 @@ functions:
           path: /users/{id}
           method: put
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   deleteUser:
     handler: protectedHandler.deleteUser
@@ -185,7 +226,7 @@ functions:
           path: /users/{id}
           method: delete
     timeout: ${self:custom.timeout}
-
+    vpc: ${self:custom.vpcConfig}
   # Order endpoints
   getOrders:
     handler: protectedHandler.getOrders
@@ -197,6 +238,7 @@ functions:
           path: /orders/{id}
           method: get
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   createOrder:
     handler: protectedHandler.createOrder
@@ -205,6 +247,7 @@ functions:
           path: /orders
           method: post
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   updateOrder:
     handler: protectedHandler.updateOrder
@@ -213,6 +256,7 @@ functions:
           path: /orders/{id}
           method: put
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   deleteOrder:
     handler: protectedHandler.deleteOrder
@@ -221,6 +265,7 @@ functions:
           path: /orders/{id}
           method: delete
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
   getTotalPrice:
     handler: protectedHandler.getTotalPrice
     events:
@@ -228,7 +273,7 @@ functions:
           path: /orders/total-price
           method: get
     timeout: ${self:custom.timeout}
-  # Order item endpoints
+    vpc: ${self:custom.vpcConfig} # Order item endpoints
   addOrderItem:
     handler: protectedHandler.addOrderItem
     events:
@@ -236,6 +281,7 @@ functions:
           path: /orders/{id}/items
           method: post
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   removeOrderItem:
     handler: protectedHandler.removeOrderItem
@@ -244,7 +290,7 @@ functions:
           path: /orders/items/{itemId}
           method: delete
     timeout: ${self:custom.timeout}
-
+    vpc: ${self:custom.vpcConfig}
   # Product Image endpoints
   uploadProductImage:
     handler: protectedHandler.uploadProductImage
@@ -253,6 +299,7 @@ functions:
           path: /products/images/upload
           method: post
     timeout: 30 # Reduced to match HTTP API limit
+    vpc: ${self:custom.vpcConfig}
 
   deleteProductImage:
     handler: protectedHandler.deleteProductImage
@@ -261,6 +308,7 @@ functions:
           path: /products/images/{imageKey}
           method: delete
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   # Product Image Database Record endpoints
   getProductImages:
@@ -273,6 +321,7 @@ functions:
           path: /products/images/{imageId}
           method: get
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   createProductImageRecord:
     handler: protectedHandler.createProductImageRecord
@@ -281,6 +330,7 @@ functions:
           path: /products/images/record
           method: post
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
   updateProductImageRecord:
     handler: protectedHandler.updateProductImageRecord
     events:
@@ -288,6 +338,7 @@ functions:
           path: /products/images/record/{imageId}
           method: put
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   setPrimaryProductImage:
     handler: protectedHandler.setPrimaryProductImage
@@ -296,6 +347,7 @@ functions:
           path: /products/{productId}/images/{imageId}/primary
           method: put
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   deleteProductImageRecord:
     handler: protectedHandler.deleteProductImageRecord
@@ -304,6 +356,7 @@ functions:
           path: /products/images/record/{imageId}
           method: delete
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
   deleteProductImages:
     handler: protectedHandler.deleteProductImages
@@ -312,6 +365,7 @@ functions:
           path: /products/{productId}/images
           method: delete
     timeout: ${self:custom.timeout}
+    vpc: ${self:custom.vpcConfig}
 
 # AWS Resources
 resources:

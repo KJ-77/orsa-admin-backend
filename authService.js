@@ -17,11 +17,14 @@ let jwksClientInstance = null;
  */
 const getJwksClient = (region, userPoolId) => {
   if (!jwksClientInstance) {
+    const jwksUri = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}/.well-known/jwks.json`;
+    console.log('Creating JWKS client with URI:', jwksUri);
+    
     jwksClientInstance = jwksClient({
       cache: true,
       cacheMaxEntries: 5,
       cacheMaxAge: 600000, // 10 minutes
-      jwksUri: `https://cognito-idp.${region}.amazonaws.com/${userPoolId}/.well-known/jwks.json`,
+      jwksUri: jwksUri,
     });
   }
   return jwksClientInstance;
@@ -56,6 +59,13 @@ const getKey = (kid, client) => {
  */
 const verifyToken = async (token, region, userPoolId, clientId) => {
   try {
+    console.log("Token verification starting with config:", {
+      region,
+      userPoolId,
+      clientId,
+      tokenPreview: token.substring(0, 50) + "...",
+    });
+
     // Decode token header to get key ID
     const decodedHeader = jwt.decode(token, { complete: true });
 
@@ -67,23 +77,37 @@ const verifyToken = async (token, region, userPoolId, clientId) => {
     const client = getJwksClient(region, userPoolId);
 
     // Get public key for verification
-    const signingKey = await getKey(kid, client);
-
-    // Verify token
+    const signingKey = await getKey(kid, client); // Verify token
     const payload = jwt.verify(token, signingKey, {
       audience: clientId,
       issuer: `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`,
       algorithms: ["RS256"],
     });
 
-    // Additional validation
+    // Additional validation for token type
     if (payload.token_use !== "access" && payload.token_use !== "id") {
-      throw new Error("Invalid token use");
+      throw new Error(
+        `Invalid token use: ${payload.token_use}. Expected 'access' or 'id'`
+      );
     }
 
+    // Log token details for debugging (remove in production)
+    console.log("Token validation successful:", {
+      sub: payload.sub,
+      token_use: payload.token_use,
+      aud: payload.aud,
+      groups: payload["cognito:groups"],
+      email: payload.email,
+    });
     return payload;
   } catch (error) {
-    console.error("Token verification failed:", error.message);
+    console.error("Token verification failed:", {
+      error: error.message,
+      errorStack: error.stack,
+      tokenPreview: token ? token.substring(0, 50) + "..." : "No token",
+      expectedAudience: clientId,
+      expectedIssuer: `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`,
+    });
     throw new Error(`Token verification failed: ${error.message}`);
   }
 };
@@ -94,8 +118,33 @@ const verifyToken = async (token, region, userPoolId, clientId) => {
  * @returns {string} JWT token
  */
 const extractToken = (event) => {
+  // Debug: Log entire event structure to understand the format
+  console.log(
+    "Event structure debug:",
+    JSON.stringify(
+      {
+        headers: event.headers,
+        multiValueHeaders: event.multiValueHeaders,
+        requestContext: event.requestContext?.http || event.requestContext,
+        httpMethod: event.httpMethod,
+        path: event.path || event.rawPath,
+      },
+      null,
+      2
+    )
+  );
+
+  // For HTTP API v2.0, headers are lowercase and structure is different
+  // Check all possible header locations and formats
   const authHeader =
-    event.headers?.authorization || event.headers?.Authorization;
+    event.headers?.authorization ||
+    event.headers?.Authorization ||
+    event.headers?.["authorization"] ||
+    event.headers?.["Authorization"] ||
+    event.multiValueHeaders?.authorization?.[0] ||
+    event.multiValueHeaders?.Authorization?.[0];
+
+  console.log("Auth header found:", authHeader);
 
   if (!authHeader) {
     throw new Error("No authorization header found");
@@ -119,7 +168,7 @@ const extractToken = (event) => {
 const authenticate = async (event) => {
   try {
     // Get configuration from environment variables
-    const region = process.env.AWS_REGION || "eu-west-3";
+    const region = process.env.COGNITO_REGION || "eu-west-3";
     const userPoolId = process.env.COGNITO_USER_POOL_ID;
     const clientId = process.env.COGNITO_CLIENT_ID;
 
@@ -127,9 +176,7 @@ const authenticate = async (event) => {
       throw new Error(
         "Cognito configuration missing. Please set COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID environment variables."
       );
-    }
-
-    // Extract and verify token
+    }    // Extract and verify token
     const token = extractToken(event);
     const payload = await verifyToken(token, region, userPoolId, clientId);
 
@@ -141,7 +188,7 @@ const authenticate = async (event) => {
       groups: payload["cognito:groups"] || [],
       tokenUse: payload.token_use,
       clientId: payload.aud,
-      isAdmin: (payload["cognito:groups"] || []).includes("admin"),
+      isAdmin: (payload["cognito:groups"] || []).includes("admins"),
     };
   } catch (error) {
     console.error("Authentication failed:", error.message);
@@ -185,21 +232,18 @@ const authorizer = async (event) => {
     const token =
       event.authorizationToken?.replace("Bearer ", "") ||
       event.headers?.authorization?.replace("Bearer ", "");
-
     if (!token) {
       throw new Error("No token provided");
     }
 
     // Get configuration
-    const region = process.env.AWS_REGION || "eu-west-3";
+    const region = process.env.COGNITO_REGION || "eu-west-3";
     const userPoolId = process.env.COGNITO_USER_POOL_ID;
     const clientId = process.env.COGNITO_CLIENT_ID;
 
     if (!userPoolId || !clientId) {
       throw new Error("Cognito configuration missing");
-    }
-
-    // Verify token
+    }    // Verify token
     const payload = await verifyToken(token, region, userPoolId, clientId);
 
     // Create context for Lambda functions
@@ -208,7 +252,7 @@ const authorizer = async (event) => {
       username: payload.username || payload["cognito:username"],
       email: payload.email,
       groups: JSON.stringify(payload["cognito:groups"] || []),
-      isAdmin: (payload["cognito:groups"] || []).includes("admin").toString(),
+      isAdmin: (payload["cognito:groups"] || []).includes("admins").toString(),
     };
 
     // Generate policy
