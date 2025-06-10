@@ -17,8 +17,10 @@ provider:
   httpApi:
     cors:
       allowedOrigins:
-        - "https://orsa-admin.vercel.app"
-        - "http://localhost:3000" # For local development 
+        - "https://admin.orsagroup.online"
+        - "http://localhost:3000"
+        - "http://localhost:5173"
+        - "https://www.orsagroup.online"
       allowedHeaders:
         - Content-Type # Essential for JSON requests
         - Authorization # For authentication tokens
