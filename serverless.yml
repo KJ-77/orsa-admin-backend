@@ -27,7 +27,7 @@ provider:
         - X-Requested-With # Common for AJAX/fetch requests
         - X-Api-Key # If you plan to use API keys
         - Accept # For content negotiation
-        - X-Filename # For binary uploads with filename      
+        - X-Filename # For binary uploads with filename
       allowedMethods:
         - GET
         - POST
@@ -63,6 +63,9 @@ provider:
     # S3 bucket for product images
     S3_BUCKET_NAME: "${self:service}-product-images-${self:provider.stage}"
     S3_REGION: "${self:provider.region}"
+    # Stripe configuration - REPLACE THESE WITH YOUR ACTUAL KEYS
+    STRIPE_SECRET_KEY: "${env:STRIPE_SECRET_KEY, 'sk_test_your_stripe_secret_key_here'}"
+    STRIPE_WEBHOOK_SECRET: "${env:STRIPE_WEBHOOK_SECRET, 'whsec_your_webhook_secret_here'}"
   # IAM role permissions
   iam:
     role:
@@ -306,6 +309,31 @@ functions:
       - httpApi:
           path: /products/{productId}/images
           method: delete
+    timeout: ${self:custom.timeout}
+
+  # Stripe Payment endpoints
+  createPaymentIntent:
+    handler: handler.createPaymentIntent
+    events:
+      - httpApi:
+          path: /api/create-payment-intent
+          method: post
+    timeout: ${self:custom.timeout}
+
+  stripeWebhook:
+    handler: handler.stripeWebhook
+    events:
+      - httpApi:
+          path: /api/webhook
+          method: post
+    timeout: ${self:custom.timeout}
+
+  getPaymentIntent:
+    handler: handler.getPaymentIntent
+    events:
+      - httpApi:
+          path: /api/payment-intent/{paymentIntentId}
+          method: get
     timeout: ${self:custom.timeout}
 
 # AWS Resources

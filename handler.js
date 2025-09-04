@@ -9,6 +9,7 @@ const userService = require("./userService");
 const orderService = require("./orderService");
 const imageService = require("./imageService");
 const productImageService = require("./productImageService");
+const stripeService = require("./stripeService");
 
 /**
  * Helper function to create a standardized API response
@@ -1138,6 +1139,186 @@ exports.deleteProductImages = async (event) => {
     });
   } catch (error) {
     console.error("Error deleting product images:", error);
+    return handleError(error);
+  }
+};
+
+// ================================
+// STRIPE PAYMENT HANDLERS
+// ================================
+
+/**
+ * Create a payment intent for Stripe
+ */
+exports.createPaymentIntent = async (event) => {
+  try {
+    const body = parseBody(event.body);
+
+    // Validate required fields
+    if (!body.amount) {
+      return createResponse(400, {
+        error: "Missing required field",
+        message: "amount is required",
+      });
+    }
+
+    // Validate amount
+    if (typeof body.amount !== "number" || body.amount < 50) {
+      return createResponse(400, {
+        error: "Invalid amount",
+        message: "Amount must be a number and at least 50 cents",
+      });
+    }
+
+    // Set defaults
+    const { amount, currency = "eur", items = [], metadata = {} } = body;
+
+    // Add request information to metadata
+    const enrichedMetadata = {
+      ...metadata,
+      created_from: "orsa_ecommerce_api",
+      request_id: event.requestContext?.requestId || "unknown",
+    };
+
+    // Create payment intent
+    const paymentIntent = await stripeService.createPaymentIntent({
+      amount,
+      currency,
+      items,
+      metadata: enrichedMetadata,
+    });
+
+    return createResponse(200, {
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+    });
+  } catch (error) {
+    console.error("Error creating payment intent:", error);
+
+    // Handle Stripe-specific errors
+    if (error.type && error.type.startsWith("Stripe")) {
+      return createResponse(400, {
+        error: "Payment processing error",
+        message: error.message,
+      });
+    }
+
+    return handleError(error);
+  }
+};
+
+/**
+ * Handle Stripe webhooks
+ */
+exports.stripeWebhook = async (event) => {
+  try {
+    const signature =
+      event.headers["stripe-signature"] || event.headers["Stripe-Signature"];
+
+    if (!signature) {
+      return createResponse(400, {
+        error: "Missing signature",
+        message: "Stripe signature header is required",
+      });
+    }
+
+    // Construct the event from the webhook payload
+    const stripeEvent = stripeService.constructWebhookEvent(
+      event.body,
+      signature
+    );
+
+    console.log("Received Stripe webhook:", {
+      type: stripeEvent.type,
+      id: stripeEvent.id,
+    });
+
+    // Handle different event types
+    switch (stripeEvent.type) {
+      case "payment_intent.succeeded":
+        const paymentIntent = stripeEvent.data.object;
+        console.log("Payment succeeded:", paymentIntent.id);
+
+        // Process the successful payment
+        await stripeService.handleSuccessfulPayment(paymentIntent);
+
+        break;
+
+      case "payment_intent.payment_failed":
+        const failedPayment = stripeEvent.data.object;
+        console.log("Payment failed:", failedPayment.id);
+
+        // Handle failed payment (optional)
+        // You could send notification emails, update order status, etc.
+
+        break;
+
+      case "payment_intent.created":
+        console.log("Payment intent created:", stripeEvent.data.object.id);
+        break;
+
+      default:
+        console.log("Unhandled event type:", stripeEvent.type);
+    }
+
+    // Return success response to Stripe
+    return createResponse(200, {
+      received: true,
+      eventType: stripeEvent.type,
+    });
+  } catch (error) {
+    console.error("Error processing webhook:", error);
+
+    // Return 400 for signature verification errors
+    if (
+      error.message.includes("signature") ||
+      error.message.includes("webhook")
+    ) {
+      return createResponse(400, {
+        error: "Webhook verification failed",
+        message: error.message,
+      });
+    }
+
+    return handleError(error);
+  }
+};
+
+/**
+ * Get payment intent details
+ */
+exports.getPaymentIntent = async (event) => {
+  try {
+    const paymentIntentId = getPathParameter(event, "paymentIntentId");
+
+    if (!paymentIntentId) {
+      return createResponse(400, {
+        error: "Missing parameter",
+        message: "paymentIntentId is required",
+      });
+    }
+
+    const paymentIntent = await stripeService.getPaymentIntent(paymentIntentId);
+
+    // Return only safe information
+    return createResponse(200, {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      status: paymentIntent.status,
+      metadata: paymentIntent.metadata,
+      created: paymentIntent.created,
+    });
+  } catch (error) {
+    console.error("Error retrieving payment intent:", error);
+
+    if (error.type && error.type.startsWith("Stripe")) {
+      return createResponse(404, {
+        error: "Payment not found",
+        message: "The specified payment intent was not found",
+      });
+    }
+
     return handleError(error);
   }
 };

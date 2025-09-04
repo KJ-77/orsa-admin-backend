@@ -9,17 +9,24 @@
     "deploy:prod": "serverless deploy --stage prod --verbose",
     "logs": "serverless logs -f",
     "logs:test": "serverless logs -f testDbConnection --tail",
-    "test:connection": "node test-connection.js"
+    "logs:payment": "serverless logs -f createPaymentIntent --tail",
+    "logs:webhook": "serverless logs -f stripeWebhook --tail",
+    "test:connection": "node test-connection.js",
+    "test:stripe": "node test-stripe.js",
+    "offline": "serverless offline"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",  "dependencies": {
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
     "dotenv": "^16.5.0",
     "mysql2": "^3.14.1",
-    "@aws-sdk/client-s3": "^3.0.0",
+    "stripe": "^18.5.0",
     "uuid": "^9.0.0"
-  },  "devDependencies": {
+  },
+  "devDependencies": {
     "serverless-offline": "^13.8.0",
     "serverless-plugin-aws-alerts": "^1.7.5"
   }
