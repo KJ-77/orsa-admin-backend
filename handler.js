@@ -199,6 +199,20 @@ exports.deleteProduct = async (event) => {
       return createResponse(404, { error: "Product not found" });
     }
 
+    // First delete all product images (including from S3)
+    // This ensures S3 cleanup before database cascade deletion
+    try {
+      await productImageService.deleteProductImages(productId, true);
+      console.log(`Cleaned up images for product ${productId}`);
+    } catch (imageError) {
+      console.error(
+        `Error cleaning up images for product ${productId}:`,
+        imageError
+      );
+      // Continue with product deletion even if image cleanup fails
+      // The database cascade will still clean up the database records
+    }
+
     await productService.deleteProduct(productId);
 
     return createResponse(200, {
