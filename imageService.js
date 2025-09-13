@@ -41,7 +41,7 @@ const uploadImage = async (
       ContentType: contentType,
       // Add cache control for better performance
       CacheControl: "max-age=31536000", // 1 year
-      // Note: No ACL needed since bucket policy handles public read access
+      // No ACL needed - bucket policy handles public read access
     };
 
     // Upload to S3

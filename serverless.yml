@@ -344,10 +344,10 @@ resources:
       Properties:
         BucketName: ${self:service}-product-images-${self:provider.stage}
         PublicAccessBlockConfiguration:
-          BlockPublicAcls: true # Block ACLs since we use bucket policy
-          BlockPublicPolicy: false # Allow bucket policy for public read
-          IgnorePublicAcls: true # Ignore existing ACLs
-          RestrictPublicBuckets: false # Allow bucket policy
+          BlockPublicAcls: false
+          BlockPublicPolicy: false
+          IgnorePublicAcls: false
+          RestrictPublicBuckets: false
         CorsConfiguration:
           CorsRules:
             - AllowedHeaders: ["*"]
