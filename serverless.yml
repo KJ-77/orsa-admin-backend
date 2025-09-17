@@ -319,6 +319,17 @@ functions:
           path: /api/create-payment-intent
           method: post
     timeout: ${self:custom.timeout}
+    vpc: ~  # Disable VPC for payment functions
+
+  # Test payment function without VPC
+  testStripePayment:
+    handler: stripeTest.testStripePayment
+    events:
+      - httpApi:
+          path: /api/test-payment
+          method: post
+    timeout: 10
+    vpc: ~  # Disable VPC for this function
 
   stripeWebhook:
     handler: handler.stripeWebhook
@@ -327,6 +338,7 @@ functions:
           path: /api/webhook
           method: post
     timeout: ${self:custom.timeout}
+    vpc: ~  # Disable VPC for webhook processing
 
   getPaymentIntent:
     handler: handler.getPaymentIntent
@@ -335,6 +347,7 @@ functions:
           path: /api/payment-intent/{paymentIntentId}
           method: get
     timeout: ${self:custom.timeout}
+    vpc: ~  # Disable VPC for payment status check
 
 # AWS Resources
 resources:
