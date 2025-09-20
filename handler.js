@@ -1187,6 +1187,10 @@ exports.createPaymentIntent = async (event) => {
     // Set defaults
     const { amount, currency = "eur", items = [], metadata = {} } = body;
 
+    console.log(
+      `Creating payment intent: amount=${amount}, currency=${currency}`
+    );
+
     // Add request information to metadata
     const enrichedMetadata = {
       ...metadata,

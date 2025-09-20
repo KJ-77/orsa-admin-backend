@@ -39,12 +39,18 @@ const createPaymentIntent = async ({
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount), // Ensure it's an integer
-      currency: currency.toLowerCase(),
+      currency: currency.toLowerCase(), // Explicitly set currency
       metadata: paymentMetadata,
       automatic_payment_methods: {
         enabled: true,
       },
     });
+
+    console.log(
+      `Payment intent created with currency: ${currency.toLowerCase()}, amount: ${Math.round(
+        amount
+      )} cents`
+    );
 
     return {
       id: paymentIntent.id,
@@ -162,9 +168,10 @@ const handleSuccessfulPayment = async (paymentIntent) => {
 /**
  * Calculate order amount based on items
  * @param {Array} items - Array of items with price and quantity
+ * @param {boolean} pricesInCents - Whether prices are already in cents (default: false)
  * @returns {number} Total amount in cents
  */
-const calculateOrderAmount = (items) => {
+const calculateOrderAmount = (items, pricesInCents = false) => {
   try {
     if (!Array.isArray(items) || items.length === 0) {
       throw new Error("Items array is required");
@@ -177,8 +184,9 @@ const calculateOrderAmount = (items) => {
       return sum + item.price * item.quantity;
     }, 0);
 
-    // Convert to cents if not already
-    return Math.round(total * 100);
+    // Convert to cents only if prices are in euros (main currency unit)
+    // If already in cents, return as is
+    return pricesInCents ? Math.round(total) : Math.round(total * 100);
   } catch (error) {
     console.error("Error calculating order amount:", error);
     throw error;
