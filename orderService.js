@@ -67,15 +67,16 @@ const createOrder = async (orderData) => {
 
     // 1. Create the order
     const orderQuery = `
-      INSERT INTO orders (user_id, user_name, user_location, order_status, total_price)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO orders (user_id, user_name, user_location, order_status, total_price, stripe_id)
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
     const orderParams = [
       orderData.user_id,
       orderData.user_name,
       orderData.user_location,
       orderData.order_status || "In Progress", // Default status
-      orderData.total_price, 
+      orderData.total_price,
+      orderData.stripe_id || null, 
     ];
 
     const orderResult = await connection.execute(orderQuery, orderParams);
@@ -88,6 +89,7 @@ const createOrder = async (orderData) => {
       id: orderId,
       message: "Order created successfully",
       total_price: orderData.total_price,
+      stripe_id: orderData.stripe_id || null,
     };
   } catch (error) {
     // Rollback in case of error
