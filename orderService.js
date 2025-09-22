@@ -74,45 +74,12 @@ const createOrder = async (orderData) => {
       orderData.user_id,
       orderData.user_name,
       orderData.user_location,
-      orderData.order_status || "pending", // Default status
-      orderData.total_price || 0, // Will be updated after adding items
+      orderData.order_status || "In Progress", // Default status
+      orderData.total_price, 
     ];
 
     const orderResult = await connection.execute(orderQuery, orderParams);
     const orderId = orderResult[0].insertId;
-
-    // 2. Create all order items
-    let totalPrice = 0;
-    if (orderData.items && orderData.items.length > 0) {
-      const itemQuery = `
-        INSERT INTO order_items 
-          (order_id, product_id, product_name, quantity, unit_price, total_price) 
-        VALUES 
-          (?, ?, ?, ?, ?, ?)
-      `;
-
-      for (const item of orderData.items) {
-        const itemTotal = item.quantity * item.unit_price;
-        totalPrice += itemTotal;
-
-        await connection.execute(itemQuery, [
-          orderId,
-          item.product_id,
-          item.product_name,
-          item.quantity,
-          item.unit_price,
-          itemTotal,
-        ]);
-      }
-    }
-
-    // 3. Update the order with the calculated total price
-    if (totalPrice > 0 && !orderData.total_price) {
-      await connection.execute(
-        "UPDATE orders SET total_price = ? WHERE id = ?",
-        [totalPrice, orderId]
-      );
-    }
 
     // Commit the transaction
     await connection.commit();
@@ -120,7 +87,7 @@ const createOrder = async (orderData) => {
     return {
       id: orderId,
       message: "Order created successfully",
-      total_price: totalPrice || orderData.total_price,
+      total_price: orderData.total_price,
     };
   } catch (error) {
     // Rollback in case of error
