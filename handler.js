@@ -377,6 +377,7 @@ exports.createOrder = async (event) => {
       message: "Order created successfully",
       orderId: result.id,
       totalPrice: result.total_price,
+      stripeId: result.stripe_id,
     });
   } catch (error) {
     return handleError(error);

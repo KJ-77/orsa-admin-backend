@@ -218,10 +218,10 @@ const addOrderItem = async (orderId, item) => {
     ]);
 
     // 2. Update the order's total price
-    await connection.execute(
-      "UPDATE orders SET total_price = total_price + ? WHERE id = ?",
-      [itemTotal, orderId]
-    );
+    // await connection.execute(
+    //   "UPDATE orders SET total_price = total_price + ? WHERE id = ?",
+    //   [itemTotal, orderId]
+    // );
 
     await connection.commit();
 
