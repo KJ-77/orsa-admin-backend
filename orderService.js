@@ -42,9 +42,9 @@ const getOrderById = async (id) => {
 
   // Then, get the order items
   const itemsQuery = `
-    SELECT oi.*, p.name as product_name, p.description as product_description
+    SELECT oi.*, p.description AS product_description
     FROM order_items oi
-    JOIN products p ON oi.product_id = p.id
+    LEFT JOIN products p ON oi.product_id = p.id
     WHERE oi.order_id = ?
   `;
   const items = await executeQuery(itemsQuery, [id]);
