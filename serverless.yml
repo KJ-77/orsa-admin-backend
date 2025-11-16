@@ -66,6 +66,8 @@ provider:
     # Stripe configuration - REPLACE THESE WITH YOUR ACTUAL KEYS
     STRIPE_SECRET_KEY: "${env:STRIPE_SECRET_KEY, 'sk_test_your_stripe_secret_key_here'}"
     STRIPE_WEBHOOK_SECRET: "${env:STRIPE_WEBHOOK_SECRET, 'whsec_your_webhook_secret_here'}"
+    # SNS topic ARN for order created notifications
+    ORDER_CREATED_TOPIC_ARN: !Ref OrderCreatedTopic
   # IAM role permissions
   iam:
     role:
@@ -89,6 +91,11 @@ provider:
           Action:
             - s3:ListBucket
           Resource: "arn:aws:s3:::${self:service}-product-images-${self:provider.stage}"
+        # Allow Lambda to publish to SNS topic for order notifications
+        - Effect: Allow
+          Action:
+            - sns:Publish
+          Resource: !Ref OrderCreatedTopic
 
 # Package configuration
 package:
@@ -381,6 +388,21 @@ resources:
               Action: "s3:GetObject"
               Resource: !Sub "${ProductImagesBucket.Arn}/*"
 
+    # SNS Topic for Order Created Events
+    OrderCreatedTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:service}-order-created-${self:provider.stage}
+        DisplayName: Order Created Notifications
+
+    # Dead Letter Queue for Failed SNS Deliveries
+    OrderCreatedTopicDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-order-created-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600 # 14 days
+        VisibilityTimeout: 300 # 5 minutes
+
   Outputs:
     ProductImagesBucketName:
       Description: "Name of the S3 bucket for product images"
@@ -393,3 +415,21 @@ resources:
       Value: !Sub "https://${ProductImagesBucket}.s3.${self:provider.region}.amazonaws.com"
       Export:
         Name: ${self:service}-${self:provider.stage}-ProductImagesBucketUrl
+
+    OrderCreatedTopicArn:
+      Description: "ARN of the Order Created SNS Topic"
+      Value: !Ref OrderCreatedTopic
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OrderCreatedTopicArn
+
+    OrderCreatedDLQArn:
+      Description: "ARN of the Order Created DLQ"
+      Value: !GetAtt OrderCreatedTopicDLQ.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OrderCreatedDLQArn
+
+    OrderCreatedDLQUrl:
+      Description: "URL of the Order Created DLQ"
+      Value: !Ref OrderCreatedTopicDLQ
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OrderCreatedDLQUrl

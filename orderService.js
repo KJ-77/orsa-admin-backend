@@ -4,6 +4,7 @@
  */
 
 const { executeQuery, pool } = require("./dbConnector");
+const snsService = require("./snsService");
 
 /**
  * Get all orders with basic information
@@ -84,6 +85,23 @@ const createOrder = async (orderData) => {
 
     // Commit the transaction
     await connection.commit();
+
+    // Publish order created event to SNS
+    // Await to ensure SNS publish completes before Lambda freezes
+    try {
+      await snsService.publishOrderCreated({
+        orderId: orderId,
+        userId: orderData.user_id,
+        userName: orderData.user_name,
+        userLocation: orderData.user_location,
+        totalPrice: orderData.total_price,
+        stripeId: orderData.stripe_id || null,
+        orderStatus: orderData.order_status || "In Progress"
+      });
+    } catch (snsError) {
+      // Log but don't fail - order is already created and committed
+      console.error('SNS notification failed for order:', orderId, snsError.message);
+    }
 
     return {
       id: orderId,
